@@ -1,4 +1,5 @@
 use std::fs;
+
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone)]
@@ -9,9 +10,7 @@ pub struct Config {
 }
 
 pub fn load_config() -> Config {
-    let config_content = fs::read_to_string("config.toml")
-        .expect("No config.toml found.");
+    let config_content = fs::read_to_string("config.toml").expect("No config.toml found.");
 
-    toml::from_str(config_content.as_str())
-        .expect("Failed to deserialize config.toml")
+    toml::from_str(config_content.as_str()).expect("Failed to deserialize config.toml")
 }
