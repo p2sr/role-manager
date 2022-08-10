@@ -54,7 +54,6 @@ pub async fn create_analyze_response(ctx: &Context, command: &ApplicationCommand
         response.kind(InteractionResponseType::ChannelMessageWithSource)
             .interaction_response_data(|resp_message| {
                 resp_message.content(format!("Analyzing definition file..."))
-                    .ephemeral(true)
                     .allowed_mentions(|f| f.empty_parse())
             })
     }).await.map_err(|err| format!("Failed to send interaction response: {}", err))?;
@@ -70,6 +69,8 @@ pub async fn create_analyze_response(ctx: &Context, command: &ApplicationCommand
     command.edit_original_interaction_response(&ctx.http, |response| {
         response.embed(|embed| {
             embed.title("Role Definition Summary")
+                .description(format!("`{}`", definition_file.filename))
+                .footer(format!("Comparing against {}"))
         })
     }).await.map_err(|err| RoleManagerError::newEdit(format!("Failed to send interaction response: {}", err)))?;
 
