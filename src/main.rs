@@ -1,6 +1,5 @@
 mod boards;
 mod bot;
-mod commands;
 mod config;
 mod error;
 mod analyzer;

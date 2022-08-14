@@ -6,7 +6,7 @@ use serenity::model::application::interaction::Interaction;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 
-use crate::{CmBoardsState, commands};
+use crate::CmBoardsState;
 use crate::error::RoleManagerError;
 use crate::analyzer::role_definition::RoleDefinition;
 use crate::config::Config;
@@ -103,10 +103,7 @@ pub async fn user(
     let definition: RoleDefinition = json5::from_str(response.as_str())
         .map_err(|err| RoleManagerError::newEdit(format!("Invalid role definition file: {}", err)))?;
 
-    let name = match user {
-        Some(u) => u.name,
-        None => "None".to_string()
-    };
+    let name = user.map(|u| u.name).unwrap_or(ctx.author().name.clone());
 
     ctx.say(format!("{}", name)).await?;
 
