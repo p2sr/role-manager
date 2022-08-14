@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use serenity::prelude::SerenityError;
 
 #[derive(Debug)]
 pub struct RoleManagerError {
@@ -39,5 +40,14 @@ impl From<String> for RoleManagerError {
 impl From<&str> for RoleManagerError {
     fn from(cause: &str) -> Self {
         Self { cause: cause.to_string(), report_via_edit: false }
+    }
+}
+
+impl From<SerenityError> for RoleManagerError {
+    fn from(err: SerenityError) -> Self {
+        Self {
+            cause: format!("Discord error: {}", err),
+            report_via_edit: false
+        }
     }
 }

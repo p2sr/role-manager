@@ -4,10 +4,9 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use tokio::sync::Mutex;
-use tokio_cron_scheduler::Job;
 use crate::error::RoleManagerError;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct AggregatedScoreData {
     score: u32,
     #[serde(rename = "playerRank")]
@@ -16,14 +15,14 @@ struct AggregatedScoreData {
     score_rank: u32
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct AggregatedUserData {
     #[serde(rename = "boardname")]
     board_name: Option<String>,
     avatar: Option<String>
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct AggregatedPlace {
     #[serde(rename = "userData")]
     user_data: AggregatedUserData,
@@ -31,12 +30,13 @@ struct AggregatedPlace {
     score_data: AggregatedScoreData
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct AggregatedResponse {
     #[serde(rename = "Points")]
     points: HashMap<String, AggregatedPlace>
 }
 
+#[derive(Debug)]
 pub struct CmBoardsState {
     overall: AggregatedResponse,
     sp: AggregatedResponse,

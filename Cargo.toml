@@ -7,7 +7,6 @@ edition = "2021"
 [dependencies]
 
 tokio = { version = "1" }
-tokio-cron-scheduler = "0"
 
 serde = { version = "1", features = ["derive"] }
 json5 = "0"
@@ -15,6 +14,7 @@ toml = "0"
 
 sea-query = { version = "0" }
 sea-orm = { version = "0", default-features = false, features = [ "sqlx-mysql", "runtime-tokio-rustls", "debug-print", "macros" ] }
+poise = "0"
 
 reqwest = "0"
 
