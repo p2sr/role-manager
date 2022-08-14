@@ -4,6 +4,7 @@ mod commands;
 mod config;
 mod error;
 mod analyzer;
+mod model;
 
 use std::sync::Arc;
 use std::time::Duration;
