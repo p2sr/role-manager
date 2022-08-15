@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use crate::boards::srcom::Link;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct PlatformId(pub String);
 
 #[derive(Deserialize, Debug)]

@@ -3,10 +3,10 @@ use serde::Deserialize;
 use crate::boards::srcom::category::CategoryId;
 use crate::boards::srcom::Link;
 
-#[derive(Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct VariableId(pub String);
 
-#[derive(Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Deserialize, Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct VariableValueId(pub String);
 
 #[derive(Deserialize, Debug)]

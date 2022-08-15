@@ -9,7 +9,7 @@ use crate::boards::srcom::region::RegionId;
 use crate::boards::srcom::run::Run;
 use crate::boards::srcom::variable::{VariableId, VariableValueId};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Leaderboard {
     weblink: String,
     game: GameId,
@@ -26,7 +26,7 @@ pub struct Leaderboard {
     links: Vec<Link>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct LeaderboardPlace {
     pub place: u64,
     pub run: Run

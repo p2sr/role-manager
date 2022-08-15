@@ -9,10 +9,10 @@ use crate::boards::srcom::region::RegionId;
 use crate::boards::srcom::user::UserId;
 use crate::boards::srcom::variable::{VariableId, VariableValueId};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct RunId(pub String);
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Run {
     pub id: RunId,
     pub weblink: String,
@@ -32,18 +32,18 @@ pub struct Run {
     pub links: Vec<Link>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct RunVideos {
     pub text: String,
     pub links: Vec<RunVideoLink>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct RunVideoLink {
     pub uri: String
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "status")]
 pub enum RunStatus {
     #[serde(rename = "new")]
@@ -61,7 +61,7 @@ pub enum RunStatus {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "rel")]
 pub enum RunPlayer {
     #[serde(rename = "user")]
@@ -76,7 +76,7 @@ pub enum RunPlayer {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct RunTimes {
     pub primary: String,
     pub primary_t: u64,
@@ -88,14 +88,14 @@ pub struct RunTimes {
     pub ingame_t: u64
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct RunSystem {
     pub platform: PlatformId,
     pub emulated: bool,
     pub region: Option<RegionId>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "rel")]
 pub enum RunSplits {
     #[serde(rename = "splits.io")]

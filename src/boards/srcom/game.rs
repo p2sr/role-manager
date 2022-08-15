@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use crate::boards::srcom::{Asset, Link, TimingMethod};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct GameId(pub String);
 
 #[derive(Deserialize, Debug)]
