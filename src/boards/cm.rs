@@ -7,40 +7,40 @@ use tokio::sync::Mutex;
 use crate::error::RoleManagerError;
 
 #[derive(Deserialize, Debug)]
-struct AggregatedScoreData {
-    score: u32,
+pub struct AggregatedScoreData {
+    pub score: u32,
     #[serde(rename = "playerRank")]
-    player_rank: u32,
+    pub player_rank: u32,
     #[serde(rename = "scoreRank")]
-    score_rank: u32
+    pub score_rank: u32
 }
 
 #[derive(Deserialize, Debug)]
-struct AggregatedUserData {
+pub struct AggregatedUserData {
     #[serde(rename = "boardname")]
-    board_name: Option<String>,
-    avatar: Option<String>
+    pub board_name: Option<String>,
+    pub avatar: Option<String>
 }
 
 #[derive(Deserialize, Debug)]
-struct AggregatedPlace {
+pub struct AggregatedPlace {
     #[serde(rename = "userData")]
-    user_data: AggregatedUserData,
+    pub user_data: AggregatedUserData,
     #[serde(rename = "scoreData")]
-    score_data: AggregatedScoreData
+    pub score_data: AggregatedScoreData
 }
 
 #[derive(Deserialize, Debug)]
-struct AggregatedResponse {
+pub struct AggregatedResponse {
     #[serde(rename = "Points")]
-    points: HashMap<String, AggregatedPlace>
+    pub points: HashMap<String, AggregatedPlace>
 }
 
 #[derive(Debug)]
 pub struct CmBoardsState {
-    overall: AggregatedResponse,
-    sp: AggregatedResponse,
-    coop: AggregatedResponse
+    pub overall: AggregatedResponse,
+    pub sp: AggregatedResponse,
+    pub coop: AggregatedResponse
 }
 
 impl CmBoardsState {

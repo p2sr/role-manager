@@ -9,6 +9,7 @@ edition = "2021"
 tokio = { version = "1" }
 
 chrono = "0"
+speedate = "0"
 
 serde = { version = "1", features = ["derive"] }
 json5 = "0"

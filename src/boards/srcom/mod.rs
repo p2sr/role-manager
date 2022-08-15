@@ -50,15 +50,14 @@ pub enum TimingMethod {
 }
 
 #[derive(Clone)]
-pub struct SrComBoardsState<S>
-    where S: Service<Request, Response=Response, Error=reqwest::Error> {
-    rate_limited_client: Arc<Mutex<S>>,
+pub struct SrComBoardsState {
+    rate_limited_client: Arc<Mutex<RateLimit<Client>>>,
 
     cache_persist_time: ChronoDuration,
     cached_boards: Arc<Mutex<HashMap<BoardDefinition, CachedBoard>>>
 }
 
-pub fn new_boards_state(cache_persist_time: ChronoDuration) -> SrComBoardsState<RateLimit<Client>> {
+pub fn new_boards_state(cache_persist_time: ChronoDuration) -> SrComBoardsState {
     let mut svc = tower::ServiceBuilder::new()
         .rate_limit(100, Duration::from_secs(60))
         .service(Client::new());
@@ -70,7 +69,7 @@ pub fn new_boards_state(cache_persist_time: ChronoDuration) -> SrComBoardsState<
     }
 }
 
-impl<S: Service<Request, Response=Response, Error=reqwest::Error>> SrComBoardsState<S> {
+impl SrComBoardsState {
     pub async fn fetch_leaderboard(
         &self,
         game: GameId,

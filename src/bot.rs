@@ -73,6 +73,8 @@ async fn analyze(
     let definition: RoleDefinition = json5::from_str(response.as_str())
         .map_err(|err| RoleManagerError::newEdit(format!("Invalid role definition file: {}", err)))?;
 
+    println!("Definition: {:#?}", definition);
+
     ctx.send(|response| {
         response.embed(|embed| {
             embed.title("Role Definition Summary")

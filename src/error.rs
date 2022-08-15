@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use sea_orm::DbErr;
 use serenity::prelude::SerenityError;
 
 #[derive(Debug)]
@@ -47,6 +48,15 @@ impl From<SerenityError> for RoleManagerError {
     fn from(err: SerenityError) -> Self {
         Self {
             cause: format!("Discord error: {}", err),
+            report_via_edit: false
+        }
+    }
+}
+
+impl From<DbErr> for RoleManagerError {
+    fn from(err: DbErr) -> Self {
+        Self {
+            cause: format!("Database error: {}", err),
             report_via_edit: false
         }
     }
