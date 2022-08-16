@@ -49,7 +49,8 @@ pub enum MetRequirementCause {
     },
     CmAggregate {
         steam_id: i64,
-        board: CmLeaderboard
+        board: CmLeaderboard,
+        points: u32
     },
     CmRun {
         steam_id: i64,
@@ -76,8 +77,8 @@ impl Display for MetRequirementCause {
             Self::FullgameRun { srcom_id, link, rank, time, achieved_on } => {
                 write!(f, "[#{} - {} ({})]({})", rank, time, achieved_on, link)
             }
-            Self::CmAggregate { steam_id, board } => {
-                write!(f, "[CM Aggregate {}](https://board.portal2.sr/profile/{})", board, steam_id)
+            Self::CmAggregate { steam_id, board, points } => {
+                write!(f, "[CM {} - {}](https://board.portal2.sr/profile/{})", board, points, steam_id)
             }
             Self::CmRun { steam_id, chapter, chamber, rank, time, achieved_on } => {
                 write!(f, "{}/{} - #{} - {} ({})", chapter, chamber, rank, time, achieved_on)
@@ -108,9 +109,9 @@ fn fullgame_cause(user: &UserId, place: LeaderboardPlace) -> Result<MetRequireme
     let milliseconds = ((place.run.times.primary_t - (total_seconds as f64)) * 1_000.0) as u64;
 
     let duration = if hours == 0 {
-        format!("{}:{}.{}", minutes, seconds, milliseconds)
+        format!("{}:{:02}.{:03}", minutes, seconds, milliseconds)
     } else {
-        format!("{}:{}:{}.{}", hours, minutes, seconds, milliseconds)
+        format!("{}:{:02}:{:02}.{:03}", hours, minutes, seconds, milliseconds)
     };
 
     Ok(MetRequirementCause::FullgameRun {
@@ -144,26 +145,24 @@ pub struct AnalyzedUser<'a> {
 pub async fn analyze_user<'a>(
     discord_user: &User,
     role_definition: &'a RoleDefinition,
-    db: &DatabaseConnection,
+    connections: &Vec<verified_connections::Model>,
     srcom_boards: SrComBoardsState,
-    cm_boards: CmBoardsState
+    cm_boards: CmBoardsState,
+    requires_external_details: bool
 ) -> Result<AnalyzedUser<'a>, RoleManagerError> {
-    // Request relevant (steam,srcom) accounts from database
-    let connections: Vec<verified_connections::Model> = verified_connections::Entity::find()
-        .filter(verified_connections::Column::UserId.eq(discord_user.id.0 as i64))
-        .filter(verified_connections::Column::Removed.eq(0))
-        .all(db)
-        .await?;
-
     let mut steam_ids: Vec<i64> = Vec::new();
     let mut srcom_ids = Vec::new();
     for connection in connections {
+        if connection.user_id != discord_user.id.0 as i64 {
+            continue;
+        }
+
         match connection.connection_type.as_str() {
             "steam" => {
-                steam_ids.push(connection.id.parse().map_err(|err| RoleManagerError::new(format!("Database contains steam account with invalid ID: {}", err)))?)
+                steam_ids.push(connection.id.clone().parse().map_err(|err| RoleManagerError::new(format!("Database contains steam account with invalid ID: {}", err)))?)
             }
             "srcom" => {
-                srcom_ids.push(UserId(connection.id));
+                srcom_ids.push(UserId(connection.id.clone()));
             }
             _ => {}
         }
@@ -254,7 +253,8 @@ pub async fn analyze_user<'a>(
                                         definition: requirement,
                                         cause: MetRequirementCause::CmAggregate {
                                             steam_id: *steam_id,
-                                            board: *leaderboard
+                                            board: *leaderboard,
+                                            points: place.score_data.score
                                         }
                                     });
                                     break;
@@ -334,17 +334,29 @@ pub async fn analyze_user<'a>(
     let mut external_accounts = Vec::new();
 
     for steam_id in &steam_ids {
+        let username = if requires_external_details {
+            cm_boards.fetch_profile(*steam_id).await?.board_name.unwrap_or(steam_id.to_string())
+        } else {
+            steam_id.to_string()
+        };
+
         external_accounts.push(ExternalAccount::Cm {
             id: *steam_id,
-            username: cm_boards.fetch_profile(*steam_id).await?.board_name.unwrap_or(steam_id.to_string())
+            username,
         });
     }
     for srcom_id in &srcom_ids {
-        let user = srcom_boards.fetch_user(srcom_id.clone()).await?;
+        let (username, link) = if requires_external_details {
+            let user = srcom_boards.fetch_user(srcom_id.clone()).await?;
+            (user.names.international, user.weblink)
+        } else {
+            (srcom_id.0.clone(), srcom_id.0.clone())
+        };
+
         external_accounts.push(ExternalAccount::Srcom {
             id: srcom_id.clone(),
-            username: user.names.international,
-            link: user.weblink
+            username,
+            link,
         })
     }
 

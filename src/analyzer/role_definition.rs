@@ -11,13 +11,13 @@ pub struct RoleDefinition {
     pub badges: Vec<BadgeDefinition>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct BadgeDefinition {
     pub name: String,
     pub requirements: Vec<RequirementDefinition>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum RequirementDefinition {
     #[serde(rename = "manual")]
@@ -132,13 +132,13 @@ impl Display for CmLeaderboard {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VariableDefinition {
     pub variable: VariableId,
     pub choice: VariableValueId
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Platform {
     #[serde(rename = "cm")]
     Cm,
@@ -146,7 +146,7 @@ pub enum Platform {
     Srcom
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[serde(tag = "platform")]
 pub enum RecentRequirement {
     #[serde(rename = "srcom")]
@@ -162,7 +162,7 @@ pub enum RecentRequirement {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[serde(tag = "platform")]
 pub enum RankRequirement {
     #[serde(rename = "srcom")]
@@ -174,7 +174,7 @@ pub enum RankRequirement {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[serde(tag = "platform")]
 pub enum TimeRequirement {
     #[serde(rename = "srcom")]

@@ -1,16 +1,23 @@
 use std::sync::Arc;
+use std::borrow::Cow;
+use std::collections::HashMap;
 
 use sea_orm::DatabaseConnection;
+use sea_orm::EntityTrait;
+use sea_orm::QueryFilter;
+use sea_orm::ColumnTrait;
 use serenity::async_trait;
+use serenity::http::CacheHttp;
 use serenity::model::application::interaction::Interaction;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 use crate::{CmBoardsState, SrComBoardsState};
 use crate::error::RoleManagerError;
-use crate::analyzer::role_definition::RoleDefinition;
+use crate::analyzer::role_definition::{RequirementDefinition, RoleDefinition};
 use crate::analyzer::user::{analyze_user, ExternalAccount};
 use crate::config::Config;
+use crate::model::lumadb::verified_connections;
 
 #[derive(Debug)]
 pub struct BotState {
@@ -52,10 +59,20 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state
                 b
             }).await.unwrap();
 
+            GuildId(713630719582404609).set_application_commands(ctx, |b| {
+                *b = poise::builtins::create_application_commands(&framework.options().commands);
+                b
+            }).await.unwrap();
+
             Ok(BotState { db, srcom_state, cm_state })
         }));
 
     framework.run_autosharded().await.unwrap();
+}
+
+struct BadgeAnalysis {
+    count: u32,
+    requirement_counts: HashMap<RequirementDefinition, u32>
 }
 
 /// Provides a general analysis of a skill role file
@@ -71,17 +88,130 @@ async fn analyze(
     let response = reqwest::get(definition_file.url.clone())
         .await.map_err(|err| RoleManagerError::newEdit(format!("Failed to download provided role definition file: {}", err)))?
         .text().await.map_err(|err| RoleManagerError::newEdit(format!("Failed to interpret provided role definition file download: {}", err)))?;
+    let response_str = response.as_str();
 
-    let definition: RoleDefinition = json5::from_str(response.as_str())
+    let definition: RoleDefinition = json5::from_str(response_str)
         .map_err(|err| RoleManagerError::newEdit(format!("Invalid role definition file: {}", err)))?;
 
-    println!("Definition: {:#?}", definition);
+    let mut badges = HashMap::new();
+
+    for badge in &definition.badges {
+        let mut reqs = HashMap::new();
+        for req in &badge.requirements {
+            reqs.insert(req.clone(), 0);
+        }
+
+        badges.insert(badge.clone(), BadgeAnalysis {
+            count: 0,
+            requirement_counts: reqs
+        });
+    }
+
+    let mut total_users = 0;
+    let mut steam_users = 0;
+    let mut srcom_users = 0;
+
+    // Request relevant (steam,srcom) accounts from database
+    let connections: Vec<verified_connections::Model> = verified_connections::Entity::find()
+        .filter(verified_connections::Column::Removed.eq(0))
+        .all(ctx.data().db.as_ref())
+        .await?;
+
+    let mut users: Vec<Member> = Vec::new();
+    let mut offset: Option<u64> = None;
+
+    loop {
+        let iteration = ctx.discord().http.get_guild_members(146404426746167296, Some(1_000), offset).await?;
+        if !iteration.is_empty() {
+            offset = Some(iteration.get(iteration.len() - 1).unwrap().user.id.0);
+        }
+
+        let end = iteration.len() < 1000;
+
+        users.extend(iteration);
+
+        if end {
+            break;
+        }
+    }
+
+    let mut i = 0;
+    for user in &users {
+        if i % 100 == 0 {
+            println!("Analyzing user {}/{}", i, &users.len());
+        }
+        i += 1;
+
+        let analysis = analyze_user(
+            &user.user,
+            &definition,
+            &connections,
+            ctx.data().srcom_state.clone(),
+            ctx.data().cm_state.clone(),
+            false
+        ).await?;
+
+        total_users += 1;
+        let mut found_steam = false;
+        let mut found_srcom = false;
+        for ext in analysis.external_accounts {
+            match ext {
+                ExternalAccount::Cm {..} => {
+                    if !found_steam {
+                        steam_users += 1;
+                        found_steam = true;
+                    }
+                },
+                ExternalAccount::Srcom {..} => {
+                    if !found_srcom {
+                        srcom_users += 1;
+                        found_srcom = true;
+                    }
+                }
+            }
+        }
+
+        for badge in &analysis.badges {
+            let summary = badges.get_mut(badge.definition).unwrap();
+
+            summary.count += 1;
+
+            for req in &badge.met_requirements {
+                let req_summary = summary.requirement_counts.get_mut(req.definition).unwrap();
+
+                *req_summary += 1;
+            }
+        }
+    }
+
+    let mut fields: Vec<(String, String)> = Vec::new();
+    for badge in &definition.badges {
+        let summary = badges.get(badge).unwrap();
+
+        let mut requirement_descs = Vec::new();
+        for req in &badge.requirements {
+            let req_summary = summary.requirement_counts.get(req).unwrap();
+
+            requirement_descs.push(format!("{} - **{}/{}**", req.format(ctx.data().srcom_state.clone(), ctx.data().cm_state.clone()).await?, req_summary, summary.count))
+        }
+
+        fields.push((format!("{} - {}", badge.name, summary.count), requirement_descs.join("\n")))
+    }
 
     ctx.send(|response| {
         response.embed(|embed| {
-            embed.title("Role Definition Summary")
-                .description(format!("`{}`", definition_file.filename))
-                .footer(|f| f.text(format!("Comparing against xyz")))
+            let mut builder = embed.title("Role Definition Summary")
+                .description(format!("Analyzed **{} Users** ({} CM, {} SRcom)", total_users, steam_users, srcom_users))
+                .footer(|f| f.text(format!("Context: {}", definition_file.filename)));
+
+            for field in fields {
+                builder = builder.field(field.0, field.1, false);
+            }
+
+            builder
+        }).attachment(AttachmentType::Bytes {
+            data: Cow::Owned(response_str.as_bytes().to_vec()),
+            filename: definition_file.filename
         })
     }).await?;
 
@@ -105,20 +235,29 @@ pub async fn user(
     let response = reqwest::get(definition_file.url.clone())
         .await.map_err(|err| RoleManagerError::newEdit(format!("Failed to download provided role definition file: {}", err)))?
         .text().await.map_err(|err| RoleManagerError::newEdit(format!("Failed to interpret provided role definition file download: {}", err)))?;
+    let response_str = response.as_str();
 
-    let definition: RoleDefinition = json5::from_str(response.as_str())
+    let definition: RoleDefinition = json5::from_str(response_str)
         .map_err(|err| RoleManagerError::newEdit(format!("Invalid role definition file: {}", err)))?;
 
     let user = user.as_ref().unwrap_or(ctx.author());
 
     println!("Analyzing {}#{:04}", user.name, user.discriminator);
 
+    // Request relevant (steam,srcom) accounts from database
+    let connections: Vec<verified_connections::Model> = verified_connections::Entity::find()
+        .filter(verified_connections::Column::UserId.eq(user.id.0 as i64))
+        .filter(verified_connections::Column::Removed.eq(0))
+        .all(ctx.data().db.as_ref())
+        .await?;
+
     let analysis = analyze_user(
         user,
         &definition,
-        ctx.data().db.as_ref(),
+        &connections,
         ctx.data().srcom_state.clone(),
-        ctx.data().cm_state.clone()
+        ctx.data().cm_state.clone(),
+        true
     ).await?;
 
     let mut fields: Vec<(String, String)> = Vec::new();
@@ -135,7 +274,7 @@ pub async fn user(
 
     ctx.send(|response| {
         response.embed(|embed| {
-            let mut builder = embed.footer(|f| f.text(format!("Context `{}`", definition_file.filename)))
+            let mut builder = embed.footer(|f| f.text(format!("Context: {}", definition_file.filename)))
                 .author(|author| {
                     author.name(&user.name.clone())
                         .icon_url(user.avatar_url().unwrap_or(user.default_avatar_url()))
@@ -160,6 +299,9 @@ pub async fn user(
             }
 
             builder
+        }).attachment(AttachmentType::Bytes {
+            data: Cow::Owned(response_str.as_bytes().to_vec()),
+            filename: definition_file.filename
         })
     }).await?;
 
