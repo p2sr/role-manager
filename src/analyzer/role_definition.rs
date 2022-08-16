@@ -29,7 +29,7 @@ pub enum RequirementDefinition {
     Recent(RecentRequirement)
 }
 
-#[derive(Deserialize, Debug, Copy, Clone)]
+#[derive(Deserialize, Debug, Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[serde(tag = "leaderboard")]
 pub enum CmLeaderboard {
     #[serde(rename = "aggregated/overall")]

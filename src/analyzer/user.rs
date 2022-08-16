@@ -94,11 +94,11 @@ pub struct AnalyzedUser<'a> {
 }
 
 pub async fn analyze_user<'a>(
-    discord_user: User,
+    discord_user: &User,
     role_definition: &'a RoleDefinition,
     db: &DatabaseConnection,
     srcom_boards: SrComBoardsState,
-    cm_boards: Arc<Mutex<CmBoardsState>>
+    cm_boards: CmBoardsState
 ) -> Result<AnalyzedUser<'a>, RoleManagerError> {
     // Request relevant (steam,srcom) accounts from database
     let connections: Vec<verified_connections::Model> = verified_connections::Entity::find()
@@ -196,20 +196,8 @@ pub async fn analyze_user<'a>(
                     }
                 }
                 RequirementDefinition::Points { leaderboard, points } => {
-                    let boards = cm_boards.lock().await;
-
                     for steam_id in &steam_ids {
-                        let points_map = match leaderboard {
-                            CmLeaderboard::Overall => {
-                                &boards.overall.points
-                            }
-                            CmLeaderboard::SinglePlayer => {
-                                &boards.sp.points
-                            }
-                            CmLeaderboard::Coop => {
-                                &boards.coop.points
-                            }
-                        };
+                        let points_map = cm_boards.fetch_aggregate(leaderboard).await?.points;
 
                         match points_map.get(&(steam_id.to_string())) {
                             Some(place) => {

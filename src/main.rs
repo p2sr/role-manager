@@ -6,7 +6,7 @@ mod analyzer;
 mod model;
 
 use std::sync::Arc;
-use std::time::Duration;
+use chrono::Duration;
 
 use sea_orm::{Database, DatabaseConnection};
 use serenity::model::id::GuildId;
@@ -14,6 +14,7 @@ use serenity::prelude::{Client, GatewayIntents};
 use tokio::sync::Mutex;
 use tokio::time;
 use crate::boards::cm::CmBoardsState;
+use crate::boards::srcom::SrComBoardsState;
 
 use crate::bot::{BotState};
 
@@ -26,8 +27,9 @@ async fn main() {
     let db: DatabaseConnection = Database::connect(&config.database_url).await.expect(
         format!("Failed to open connection to database at {}", &config.database_url).as_str()
     );
-    let cm_state = Arc::new(Mutex::new(CmBoardsState::new().await));
-    CmBoardsState::schedule_refresh(Arc::clone(&cm_state));
 
-    bot::create_bot(config, Arc::new(db), cm_state).await;
+    let srcom_state = SrComBoardsState::new(Duration::minutes(15));
+    let cm_state = CmBoardsState::new(Duration::minutes(15));
+
+    bot::create_bot(config, Arc::new(db), srcom_state, cm_state).await;
 }
