@@ -1,6 +1,12 @@
 use serde::Deserialize;
 use crate::boards::srcom::Link;
 
+#[derive(Deserialize, Debug)]
+pub enum CategoryOrId {
+    Id(CategoryId),
+    Category { data: Category }
+}
+
 #[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct CategoryId(pub String);
 

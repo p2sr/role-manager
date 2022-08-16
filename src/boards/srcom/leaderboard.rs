@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 use serde::Deserialize;
 use crate::boards::srcom::category::CategoryId;
-use crate::boards::srcom::game::GameId;
+use crate::boards::srcom::game::{GameId, GameOrId};
 use crate::boards::srcom::level::LevelId;
-use crate::boards::srcom::{Link, TimingMethod};
+use crate::boards::srcom::{Link, MultipleItemRequest, TimingMethod};
 use crate::boards::srcom::platform::PlatformId;
 use crate::boards::srcom::region::RegionId;
 use crate::boards::srcom::run::{Run, RunPlayer, RunStatus};
-use crate::boards::srcom::user::UserId;
-use crate::boards::srcom::variable::{VariableId, VariableValueId};
+use crate::boards::srcom::user::{User, UserId};
+use crate::boards::srcom::variable::{Variable, VariableId, VariableValueId};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Leaderboard {
     pub weblink: String,
-    pub game: GameId,
+    pub game: GameOrId,
     pub category: CategoryId,
     pub level: Option<LevelId>,
     pub platform: Option<PlatformId>,
@@ -24,7 +24,9 @@ pub struct Leaderboard {
     pub timing: TimingMethod,
     pub values: HashMap<VariableId, VariableValueId>,
     pub runs: Vec<LeaderboardPlace>,
-    pub links: Option<Vec<Link>>
+    pub links: Option<Vec<Link>>,
+    pub players: Option<MultipleItemRequest<User>>,
+    pub variables: Option<MultipleItemRequest<Variable>>
 }
 
 #[derive(Deserialize, Debug, Clone)]

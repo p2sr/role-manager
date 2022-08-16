@@ -2,6 +2,14 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use crate::boards::srcom::{Asset, Link, TimingMethod};
 
+#[derive(Deserialize, Debug)]
+pub enum GameOrId {
+    Id(GameId),
+    Game {
+        data: Game
+    }
+}
+
 #[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct GameId(pub String);
 

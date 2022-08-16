@@ -46,7 +46,7 @@ impl Display for RequirementDefinition {
             Self::Recent(RecentRequirement::Cm { months}) => {
                 write!(f, "CM - Activity in last {} months", months)
             }
-            Self::Recent(RecentRequirement::Srcom {game, category, variables, months}) => {
+            Self::Recent(RecentRequirement::Srcom { game, category, variables, months}) => {
                 write!(f, "Speedrun.com - {} - {} - Activity in last {} months", game, category, months)
             }
         }
