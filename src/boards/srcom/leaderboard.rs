@@ -24,7 +24,7 @@ pub struct Leaderboard {
     pub timing: TimingMethod,
     pub values: HashMap<VariableId, VariableValueId>,
     pub runs: Vec<LeaderboardPlace>,
-    pub links: Vec<Link>
+    pub links: Option<Vec<Link>>
 }
 
 #[derive(Deserialize, Debug, Clone)]

@@ -14,7 +14,7 @@ use std::time::Duration;
 use chrono::{NaiveDateTime, Utc};
 use chrono::Duration as ChronoDuration;
 use reqwest::{Client, Method, Request, Response, Url};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use tokio::sync::Mutex;
 use tower::limit::RateLimit;
 use tower::Service;
@@ -177,7 +177,7 @@ impl SrComBoardsState {
     }
 }
 
-#[derive(Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Hash, Ord, PartialOrd, Eq, PartialEq)]
 struct BoardDefinition {
     game: GameId,
     category: CategoryId,
@@ -185,6 +185,7 @@ struct BoardDefinition {
     variables: BTreeMap<VariableId, VariableValueId>
 }
 
+#[derive(Debug)]
 struct CachedBoard {
     leaderboard: Leaderboard,
     fetched_at: NaiveDateTime

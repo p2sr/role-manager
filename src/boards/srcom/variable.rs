@@ -22,7 +22,7 @@ pub struct Variable {
     pub values: VariableValues,
     #[serde(rename = "is-subcategory")]
     pub is_subcategory: bool,
-    pub links: Vec<Link>
+    pub links: Option<Vec<Link>>
 }
 
 #[derive(Deserialize, Debug)]

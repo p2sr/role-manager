@@ -18,7 +18,7 @@ pub struct User {
     pub youtube: Option<UserConnection>,
     pub twitter: Option<UserConnection>,
     pub speedrunslive: Option<UserConnection>,
-    pub links: Vec<Link>
+    pub links: Option<Vec<Link>>
 }
 
 #[derive(Deserialize, Debug)]

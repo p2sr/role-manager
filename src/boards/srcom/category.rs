@@ -14,7 +14,7 @@ pub struct Category {
     pub rules: String,
     pub players: PlayerCount,
     pub miscellaneous: bool,
-    pub links: Vec<Link>
+    pub links: Option<Vec<Link>>
 }
 
 #[derive(Deserialize, Debug)]

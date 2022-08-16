@@ -8,5 +8,5 @@ pub struct RegionId(pub String);
 pub struct Region {
     pub id: RegionId,
     pub name: String,
-    pub links: Vec<Link>
+    pub links: Option<Vec<Link>>
 }

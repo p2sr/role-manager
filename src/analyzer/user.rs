@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{Date, DateTime, NaiveDateTime, TimeZone, Utc};
 use sea_orm::DatabaseConnection;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
@@ -19,6 +20,7 @@ use crate::CmBoardsState;
 use crate::error::RoleManagerError;
 use crate::model::lumadb::verified_connections;
 
+#[derive(Debug)]
 pub enum ExternalAccount {
     Srcom {
         username: String,
@@ -30,6 +32,7 @@ pub enum ExternalAccount {
     }
 }
 
+#[derive(Debug)]
 pub enum MetRequirementCause {
     Manual {
         assigned_on: NaiveDateTime,
@@ -40,7 +43,7 @@ pub enum MetRequirementCause {
         link: String,
         rank: u32,
         time: String,
-        achieved_on: NaiveDateTime,
+        achieved_on: speedate::Date,
     },
     CmAggregate {
         steam_id: i64,
@@ -53,18 +56,46 @@ pub enum MetRequirementCause {
         rank: u32,
         time: String,
         achieved_on: NaiveDateTime
+    },
+    CmActivity {
+        steam_id: i64
+    }
+}
+
+impl Display for MetRequirementCause {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Manual { assigned_on, note } => {
+                match note {
+                    Some(note_text) => write!(f, "Assigned {} - {}", assigned_on, note_text),
+                    None => write!(f, "Assigned {}", assigned_on)
+                }
+            }
+            Self::FullgameRun { srcom_id, link, rank, time, achieved_on } => {
+                write!(f, "[#{} - {} ({})]({})", rank, time, achieved_on, link)
+            }
+            Self::CmAggregate { steam_id, board } => {
+                write!(f, "CM Aggregate {}", board)
+            }
+            Self::CmRun { steam_id, chapter, chamber, rank, time, achieved_on } => {
+                write!(f, "{}/{} - #{} - {} ({})", chapter, chamber, rank, time, achieved_on)
+            }
+            Self::CmActivity { steam_id } => {
+                write!(f, "CM Activity")
+            }
+        }
     }
 }
 
 fn fullgame_cause(user: &UserId, place: LeaderboardPlace) -> Result<MetRequirementCause, RoleManagerError> {
     let date = match place.run.date {
         Some(d) => {
-            DateTime::parse_from_rfc3339(d.as_str())
-                .map_err(|err| RoleManagerError::new(format!("Speedrun.com returned an invalid date format: {}", err)))?
-                .naive_utc()
+            speedate::Date::parse_str(d.as_str())
+                .map_err(|err| RoleManagerError::new(format!("Speedrun.com returned an invalid date format: {} (caused by {})", d, err)))?
         }
         None => {
-            Utc::now().naive_utc()
+            speedate::Date::parse_str(Utc::now().date_naive().to_string().as_str())
+                .map_err(|err| RoleManagerError::new(format!("Chrono returned an invalid datetime: {:?}", err)))?
         }
     };
 
@@ -77,16 +108,19 @@ fn fullgame_cause(user: &UserId, place: LeaderboardPlace) -> Result<MetRequireme
     })
 }
 
+#[derive(Debug)]
 pub struct MetRequirement<'a> {
     pub definition: &'a RequirementDefinition,
     pub cause: MetRequirementCause
 }
 
+#[derive(Debug)]
 pub struct AnalyzedUserBadge<'a> {
     pub definition: &'a BadgeDefinition,
     pub met_requirements: Vec<MetRequirement<'a>>
 }
 
+#[derive(Debug)]
 pub struct AnalyzedUser<'a> {
     pub discord_user: User,
     pub external_accounts: Vec<ExternalAccount>,
@@ -131,7 +165,7 @@ pub async fn analyze_user<'a>(
             match requirement {
                 RequirementDefinition::Rank(req) => {
                     match req {
-                        RankRequirement::Srcom { game, category, variables, top} => {
+                        RankRequirement::Srcom { game, category, variables, top } => {
                             let mut variable_map = BTreeMap::new();
                             match variables {
                                 Some(v) => {
@@ -164,7 +198,7 @@ pub async fn analyze_user<'a>(
                     match req {
                         TimeRequirement::Srcom { game, category, variables, time } => {
                             let seconds = speedate::Duration::parse_str(time.as_str())
-                                .map_err(|err| RoleManagerError::new(format!("Invalid date specified in badge {}, {} (caused by {:?})", badge_definition.name, time, err)))?
+                                .map_err(|err| RoleManagerError::new(format!("Invalid duration specified in badge {}, {} (caused by {:?})", badge_definition.name, time, err)))?
                                 .signed_total_seconds();
 
                             let mut variable_map = BTreeMap::new();
@@ -181,7 +215,7 @@ pub async fn analyze_user<'a>(
                             for srcom in &srcom_ids {
                                 match leaderboard.get_highest_run(&srcom) {
                                     Some(run) => {
-                                        if run.run.times.primary_t <= seconds as u64 {
+                                        if run.run.times.primary_t <= seconds as f64 {
                                             met_requirements.push(MetRequirement {
                                                 definition: requirement,
                                                 cause: fullgame_cause(srcom, run)?
@@ -218,29 +252,27 @@ pub async fn analyze_user<'a>(
                 }
                 RequirementDefinition::Recent(recent) => {
                     match recent {
-                        RecentRequirement::Srcom { game, category, variables, months } => {
-
-                        }
-                        RecentRequirement::Cm { months } => {
-
-                        }
+                        RecentRequirement::Srcom { game, category, variables, months } => {}
+                        RecentRequirement::Cm { months } => {}
                     }
                 }
                 RequirementDefinition::Manual => {}
             }
         }
 
-        analyzed_badges.push(AnalyzedUserBadge {
-            definition: badge_definition,
-            met_requirements
-        });
+        if met_requirements.len() > 0 {
+            analyzed_badges.push(AnalyzedUserBadge {
+                definition: badge_definition,
+                met_requirements
+            });
+        }
     }
 
     // Accumulate info about external accounts (Should be cached now that we've requested LBs)
 
 
     Ok(AnalyzedUser {
-        discord_user,
+        discord_user: discord_user.clone(),
         external_accounts: vec![],
         badges: analyzed_badges
     })

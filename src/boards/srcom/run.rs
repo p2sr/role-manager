@@ -17,10 +17,10 @@ pub struct Run {
     pub id: RunId,
     pub weblink: String,
     pub game: GameId,
-    pub level: LevelId,
+    pub level: Option<LevelId>,
     pub category: CategoryId,
-    pub videos: RunVideos,
-    pub comment: String,
+    pub videos: Option<RunVideos>,
+    pub comment: Option<String>,
     pub status: RunStatus,
     pub players: Vec<RunPlayer>,
     pub date: Option<String>,
@@ -29,12 +29,12 @@ pub struct Run {
     pub system: RunSystem,
     pub splits: Option<RunSplits>,
     pub values: HashMap<VariableId, VariableValueId>,
-    pub links: Vec<Link>
+    pub links: Option<Vec<Link>>
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct RunVideos {
-    pub text: String,
+    pub text: Option<String>,
     pub links: Vec<RunVideoLink>
 }
 
@@ -50,14 +50,14 @@ pub enum RunStatus {
     New,
     #[serde(rename = "verified")]
     Verified {
-        examiner: UserId,
+        examiner: Option<UserId>,
         #[serde(rename = "verify-date")]
         verify_date: Option<String>
     },
     #[serde(rename = "rejected")]
     Rejected {
-        examiner: UserId,
-        reason: String
+        examiner: Option<UserId>,
+        reason: Option<String>
     }
 }
 
@@ -79,18 +79,18 @@ pub enum RunPlayer {
 #[derive(Deserialize, Debug, Clone)]
 pub struct RunTimes {
     pub primary: String,
-    pub primary_t: u64,
+    pub primary_t: f64,
     pub realtime: Option<String>,
-    pub realtime_t: u64,
+    pub realtime_t: f64,
     pub realtime_noloads: Option<String>,
-    pub realtime_noloads_t: u64,
+    pub realtime_noloads_t: f64,
     pub ingame: Option<String>,
-    pub ingame_t: u64
+    pub ingame_t: f64
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct RunSystem {
-    pub platform: PlatformId,
+    pub platform: Option<PlatformId>,
     pub emulated: bool,
     pub region: Option<RegionId>
 }

@@ -6,15 +6,17 @@ use serenity::model::application::interaction::Interaction;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 
-use crate::CmBoardsState;
+use crate::{CmBoardsState, SrComBoardsState};
 use crate::error::RoleManagerError;
 use crate::analyzer::role_definition::RoleDefinition;
+use crate::analyzer::user::analyze_user;
 use crate::config::Config;
 
 #[derive(Debug)]
 pub struct BotState {
     pub(crate) db: Arc<DatabaseConnection>,
-    pub(crate) cm_state: Arc<Mutex<CmBoardsState>>
+    pub(crate) srcom_state: SrComBoardsState,
+    pub(crate) cm_state: CmBoardsState
 }
 
 type PoiseContext<'a> = poise::Context<'a, BotState, RoleManagerError>;
@@ -35,7 +37,7 @@ async fn on_error(error: poise::FrameworkError<'_, BotState, RoleManagerError>) 
     }
 }
 
-pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, cm_state: Arc<Mutex<CmBoardsState>>) {
+pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state: SrComBoardsState, cm_state: CmBoardsState) {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![analyze(), user()],
@@ -50,7 +52,7 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, cm_state: A
                 b
             }).await.unwrap();
 
-            Ok(BotState { db, cm_state })
+            Ok(BotState { db, srcom_state, cm_state })
         }));
 
     framework.run_autosharded().await.unwrap();
@@ -105,9 +107,41 @@ pub async fn user(
     let definition: RoleDefinition = json5::from_str(response.as_str())
         .map_err(|err| RoleManagerError::newEdit(format!("Invalid role definition file: {}", err)))?;
 
-    let name = user.map(|u| u.name).unwrap_or(ctx.author().name.clone());
+    let user = user.as_ref().unwrap_or(ctx.author());
 
-    ctx.say(format!("{}", name)).await?;
+    println!("Analyzing {}#{:04}", user.name, user.discriminator);
+
+    let analysis = analyze_user(
+        user,
+        &definition,
+        ctx.data().db.as_ref(),
+        ctx.data().srcom_state.clone(),
+        ctx.data().cm_state.clone()
+    ).await?;
+
+    println!("Completed analysis: {:#?}", &analysis);
+
+    ctx.send(|response| {
+        response.embed(|embed| {
+            let mut builder = embed.description("Badges")
+                .footer(|f| f.text(format!("Context {}", definition_file.filename)))
+                .author(|author| {
+                    author.name(&user.name.clone())
+                        .icon_url(user.avatar_url().unwrap_or(user.default_avatar_url()))
+                });
+
+            for badge in &analysis.badges {
+                let mut requirement_descs = Vec::new();
+                for met_requirement in &badge.met_requirements {
+                    requirement_descs.push(format!("{}\n - {}", met_requirement.definition, met_requirement.cause));
+                }
+
+                builder = builder.field(&badge.definition.name.clone(), requirement_descs.join("\n"), false);
+            }
+
+            builder
+        })
+    }).await?;
 
     Ok(())
 }

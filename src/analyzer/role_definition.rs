@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use serde::{Deserialize};
 
 #[derive(Deserialize, Debug)]
@@ -29,8 +30,30 @@ pub enum RequirementDefinition {
     Recent(RecentRequirement)
 }
 
+impl Display for RequirementDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Manual => write!(f, "Manual"),
+            Self::Rank(RankRequirement::Srcom { game, category, variables, top }) => {
+                write!(f, "Speedrun.com - {} - {} - Top {}", game, category, top)
+            },
+            Self::Time(TimeRequirement::Srcom { game, category, variables, time}) => {
+                write!(f, "Speedrun.com - {} - {} - Sub {}", game, category, time)
+            },
+            Self::Points { leaderboard, points } => {
+                write!(f, "CM - {} - {} Points", leaderboard, points)
+            },
+            Self::Recent(RecentRequirement::Cm { months}) => {
+                write!(f, "CM - Activity in last {} months", months)
+            }
+            Self::Recent(RecentRequirement::Srcom {game, category, variables, months}) => {
+                write!(f, "Speedrun.com - {} - {} - Activity in last {} months", game, category, months)
+            }
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
-#[serde(tag = "leaderboard")]
 pub enum CmLeaderboard {
     #[serde(rename = "aggregated/overall")]
     Overall,
@@ -38,6 +61,16 @@ pub enum CmLeaderboard {
     SinglePlayer,
     #[serde(rename = "aggregated/coop")]
     Coop
+}
+
+impl Display for CmLeaderboard {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Overall => write!(f, "aggregated/overall"),
+            Self::SinglePlayer => write!(f, "aggregated/sp"),
+            Self::Coop => write!(f, "aggregated/coop")
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]

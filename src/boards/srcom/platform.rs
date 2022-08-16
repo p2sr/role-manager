@@ -9,5 +9,5 @@ pub struct Platform {
     pub id: PlatformId,
     pub name: String,
     pub released: u16,
-    pub links: Vec<Link>
+    pub links: Option<Vec<Link>>
 }

@@ -26,7 +26,7 @@ pub struct Game {
     pub moderators: HashMap<String, ModeratorRole>,
     pub created: Option<String>,
     pub assets: Assets,
-    pub links: Vec<Link>
+    pub links: Option<Vec<Link>>
 }
 
 #[derive(Deserialize, Debug)]
