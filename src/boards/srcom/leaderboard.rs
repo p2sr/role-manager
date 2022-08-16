@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use serde::Deserialize;
+use crate::analyzer::role_definition::PartnerRestriction;
 use crate::boards::srcom::category::{CategoryId, CategoryOrId};
 use crate::boards::srcom::game::{GameId, GameOrId};
 use crate::boards::srcom::level::LevelId;
@@ -36,21 +37,38 @@ pub struct LeaderboardPlace {
 }
 
 impl Leaderboard {
-    pub fn get_highest_run(&self, user_id: &UserId) -> Option<LeaderboardPlace> {
+    pub fn get_highest_run(&self, user_id: &UserId, partner_restriction: &Option<PartnerRestriction>) -> Option<LeaderboardPlace> {
         let mut best_place: Option<LeaderboardPlace> = None;
 
         for run in &self.runs {
             let mut player_match = false;
+            let mut other_players_meet_restriction = true;
             for p in &(run.run.players) {
                 if let RunPlayer::User { id, .. } = p {
                     if id == user_id {
                         player_match = true;
-                        break;
+                    } else {
+                        // Check this user against the partner restriction
+                        match partner_restriction {
+                            Some(PartnerRestriction::RankGte) => {
+                                match self.get_highest_run(id, &None) {
+                                    Some(partner_place) => {
+                                        if partner_place.place < run.place {
+                                            other_players_meet_restriction = false;
+                                        }
+                                    }
+                                    None => {}
+                                }
+                            }
+                            None => {}
+                        }
                     }
                 }
             }
 
-            if player_match && matches!(run.run.status, RunStatus::Verified {..}) {
+            if player_match
+                && matches!(run.run.status, RunStatus::Verified {..})
+                && other_players_meet_restriction {
                 if match &best_place {
                     Some(best) => run.place < best.place,
                     None => true

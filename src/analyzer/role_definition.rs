@@ -39,7 +39,7 @@ impl RequirementDefinition {
     pub async fn format(&self, srcom_state: SrComBoardsState, cm_state: CmBoardsState) -> Result<String, RoleManagerError> {
         Ok(match self {
             Self::Manual => format!("Manual"),
-            Self::Rank(RankRequirement::Srcom { game, category, variables, top }) => {
+            Self::Rank(RankRequirement::Srcom { game, category, variables, top, partner }) => {
                 let game = srcom_state.fetch_game(game.clone()).await?;
                 let category = srcom_state.fetch_category(category.clone()).await?;
 
@@ -54,13 +54,18 @@ impl RequirementDefinition {
                     variable_descs.push(format!("{}={}", variable.name, value.label));
                 }
 
+                let restriction = match partner {
+                    Some(PartnerRestriction::RankGte) => " (partner.rank>=player.rank)",
+                    None => ""
+                };
+
                 if variable_descs.is_empty() {
-                    format!("SRC - {} - {} - Top {}", game.names.international, category.name, top)
+                    format!("SRC - {} - {} - Top {}{}", game.names.international, category.name, top, restriction)
                 } else {
-                    format!("SRC - {} - {} ({}) - Top {}", game.names.international, category.name, variable_descs.join(","), top)
+                    format!("SRC - {} - {} ({}) - Top {}{}", game.names.international, category.name, variable_descs.join(","), top, restriction)
                 }
             },
-            Self::Time(TimeRequirement::Srcom { game, category, variables, time}) => {
+            Self::Time(TimeRequirement::Srcom { game, category, variables, time, partner}) => {
                 let game = srcom_state.fetch_game(game.clone()).await?;
                 let category = srcom_state.fetch_category(category.clone()).await?;
 
@@ -75,10 +80,15 @@ impl RequirementDefinition {
                     variable_descs.push(format!("{}", value.label));
                 }
 
+                let restriction = match partner {
+                    Some(PartnerRestriction::RankGte) => " (partner.rank>=player.rank)",
+                    None => ""
+                };
+
                 if variable_descs.is_empty() {
-                    format!("Speedrun.com - {} - {} - Sub {}", game.names.international, category.name, time)
+                    format!("Speedrun.com - {} - {} - Sub {}{}", game.names.international, category.name, time, restriction)
                 } else {
-                    format!("Speedrun.com - {} - {} ({}) - Sub {}", game.names.international, category.name, variable_descs.join(","), time)
+                    format!("Speedrun.com - {} - {} ({}) - Sub {}{}", game.names.international, category.name, variable_descs.join(","), time, restriction)
                 }
             },
             Self::Points { leaderboard, points } => {
@@ -170,6 +180,7 @@ pub enum RankRequirement {
         game: GameId,
         category: CategoryId,
         variables: Option<Vec<VariableDefinition>>,
+        partner: Option<PartnerRestriction>,
         top: u64
     }
 }
@@ -182,6 +193,13 @@ pub enum TimeRequirement {
         game: GameId,
         category: CategoryId,
         variables: Option<Vec<VariableDefinition>>,
+        partner: Option<PartnerRestriction>,
         time: String
     }
+}
+
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+pub enum PartnerRestriction {
+    #[serde(rename = "rank>=")]
+    RankGte
 }

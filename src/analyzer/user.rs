@@ -178,7 +178,7 @@ pub async fn analyze_user<'a>(
             match requirement {
                 RequirementDefinition::Rank(req) => {
                     match req {
-                        RankRequirement::Srcom { game, category, variables, top } => {
+                        RankRequirement::Srcom { game, category, variables, top, partner } => {
                             let mut variable_map = BTreeMap::new();
                             match variables {
                                 Some(v) => {
@@ -191,7 +191,7 @@ pub async fn analyze_user<'a>(
                             let leaderboard = srcom_boards.fetch_leaderboard_with_variables(game.clone(), category.clone(), variable_map).await?;
 
                             for srcom in &srcom_ids {
-                                match leaderboard.get_highest_run(&srcom) {
+                                match leaderboard.get_highest_run(&srcom, partner) {
                                     Some(run) => {
                                         if run.place <= *top {
                                             met_requirements.push(MetRequirement {
@@ -209,7 +209,7 @@ pub async fn analyze_user<'a>(
                 }
                 RequirementDefinition::Time(req) => {
                     match req {
-                        TimeRequirement::Srcom { game, category, variables, time } => {
+                        TimeRequirement::Srcom { game, category, variables, time, partner } => {
                             let seconds = speedate::Duration::parse_str(time.as_str())
                                 .map_err(|err| RoleManagerError::new(format!("Invalid duration specified in badge {}, {} (caused by {:?})", badge_definition.name, time, err)))?
                                 .signed_total_seconds();
@@ -226,7 +226,7 @@ pub async fn analyze_user<'a>(
                             let leaderboard = srcom_boards.fetch_leaderboard_with_variables(game.clone(),category.clone(), variable_map).await?;
 
                             for srcom in &srcom_ids {
-                                match leaderboard.get_highest_run(&srcom) {
+                                match leaderboard.get_highest_run(&srcom, partner) {
                                     Some(run) => {
                                         if run.run.times.primary_t <= seconds as f64 {
                                             met_requirements.push(MetRequirement {
@@ -279,7 +279,7 @@ pub async fn analyze_user<'a>(
                             let leaderboard = srcom_boards.fetch_leaderboard_with_variables(game.clone(), category.clone(), variable_map).await?;
 
                             for srcom in &srcom_ids {
-                                match leaderboard.get_highest_run(&srcom) {
+                                match leaderboard.get_highest_run(&srcom, &None) {
                                     Some(run) => {
                                         match &run.run.date {
                                             Some(date_text) => {
