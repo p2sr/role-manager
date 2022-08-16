@@ -55,9 +55,9 @@ impl RequirementDefinition {
                 }
 
                 if variable_descs.is_empty() {
-                    format!("Speedrun.com - {} - {} - Top {}", game.names.international, category.name, top)
+                    format!("SRC - {} - {} - Top {}", game.names.international, category.name, top)
                 } else {
-                    format!("Speedrun.com - {} - {} ({}) - Top {}", game.names.international, category.name, variable_descs.join(","), top)
+                    format!("SRC - {} - {} ({}) - Top {}", game.names.international, category.name, variable_descs.join(","), top)
                 }
             },
             Self::Time(TimeRequirement::Srcom { game, category, variables, time}) => {
@@ -72,7 +72,7 @@ impl RequirementDefinition {
                         None => return Err(RoleManagerError::new(format!("Variable value {} is not a choice for variable {}", id_pair.choice.0, id_pair.variable.0)))
                     };
 
-                    variable_descs.push(format!("{}={}", variable.name, value.label));
+                    variable_descs.push(format!("{}", value.label));
                 }
 
                 if variable_descs.is_empty() {
@@ -125,9 +125,9 @@ pub enum CmLeaderboard {
 impl Display for CmLeaderboard {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Overall => write!(f, "aggregated/overall"),
-            Self::SinglePlayer => write!(f, "aggregated/sp"),
-            Self::Coop => write!(f, "aggregated/coop")
+            Self::Overall => write!(f, "overall"),
+            Self::SinglePlayer => write!(f, "sp"),
+            Self::Coop => write!(f, "coop")
         }
     }
 }

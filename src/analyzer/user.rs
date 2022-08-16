@@ -75,10 +75,10 @@ impl Display for MetRequirementCause {
                 }
             }
             Self::FullgameRun { srcom_id, link, rank, time, achieved_on } => {
-                write!(f, "[#{} - {} ({})]({})", rank, time, achieved_on, link)
+                write!(f, "[#{} - {}]({})", rank, time, link)
             }
             Self::CmAggregate { steam_id, board, points } => {
-                write!(f, "[CM {} - {}](https://board.portal2.sr/profile/{})", board, points, steam_id)
+                write!(f, "[{} - {}](https://board.portal2.sr/profile/{})", board, points, steam_id)
             }
             Self::CmRun { steam_id, chapter, chamber, rank, time, achieved_on } => {
                 write!(f, "{}/{} - #{} - {} ({})", chapter, chamber, rank, time, achieved_on)
