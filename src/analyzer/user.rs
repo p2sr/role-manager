@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
-use chrono::{Date, DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{Date, DateTime, Duration, NaiveDateTime, TimeZone, Utc};
 use sea_orm::DatabaseConnection;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
@@ -9,6 +9,7 @@ use sea_orm::ColumnTrait;
 use serenity::model::user::User;
 use tokio::sync::Mutex;
 use crate::analyzer::role_definition::{BadgeDefinition, CmLeaderboard, RankRequirement, RecentRequirement, RequirementDefinition, RoleDefinition, TimeRequirement};
+use crate::analyzer::user::MetRequirementCause::CmActivity;
 use crate::boards::srcom;
 use crate::boards::srcom::category::CategoryId;
 use crate::boards::srcom::game::GameId;
@@ -252,8 +253,56 @@ pub async fn analyze_user<'a>(
                 }
                 RequirementDefinition::Recent(recent) => {
                     match recent {
-                        RecentRequirement::Srcom { game, category, variables, months } => {}
-                        RecentRequirement::Cm { months } => {}
+                        RecentRequirement::Srcom { game, category, variables, months } => {
+                            let mut variable_map = BTreeMap::new();
+                            match variables {
+                                Some(v) => {
+                                    for var in v {
+                                        variable_map.insert(VariableId(var.variable.clone()), VariableValueId(var.choice.clone()));
+                                    }
+                                }
+                                None => {}
+                            }
+                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(GameId(game.clone()), CategoryId(category.clone()), variable_map).await?;
+
+                            for srcom in &srcom_ids {
+                                match leaderboard.get_highest_run(&srcom) {
+                                    Some(run) => {
+                                        match &run.run.date {
+                                            Some(date_text) => {
+                                                if (Utc::now() - Duration::days(30 * 6)).timestamp() < speedate::Date::parse_str(date_text.as_str())
+                                                    .map_err(|err| RoleManagerError::new(format!("Speedrun.com provided invalid date: {} (Caused by {:?})", date_text, err)))?
+                                                    .timestamp() {
+                                                    met_requirements.push(MetRequirement {
+                                                        definition: requirement,
+                                                        cause: fullgame_cause(srcom, run)?
+                                                    });
+                                                    break
+                                                }
+                                            }
+                                            None => {}
+                                        }
+                                    }
+                                    None => {}
+                                }
+                            }
+                        }
+                        RecentRequirement::Cm { months } => {
+                            let active_users = cm_boards.fetch_active_profiles(*months)
+                                .await?;
+
+                            for steam_id in &steam_ids {
+                                if active_users.contains(&steam_id.to_string()) {
+                                    met_requirements.push(MetRequirement {
+                                        definition: requirement,
+                                        cause: CmActivity {
+                                            steam_id: *steam_id
+                                        }
+                                    });
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
                 RequirementDefinition::Manual => {}
