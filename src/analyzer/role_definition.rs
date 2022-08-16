@@ -1,5 +1,10 @@
 use std::fmt::{Display, Formatter};
 use serde::{Deserialize};
+use crate::{CmBoardsState, SrComBoardsState};
+use crate::boards::srcom::category::CategoryId;
+use crate::boards::srcom::game::GameId;
+use crate::boards::srcom::variable::{VariableId, VariableValueId};
+use crate::error::RoleManagerError;
 
 #[derive(Deserialize, Debug)]
 pub struct RoleDefinition {
@@ -30,26 +35,80 @@ pub enum RequirementDefinition {
     Recent(RecentRequirement)
 }
 
-impl Display for RequirementDefinition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Manual => write!(f, "Manual"),
+impl RequirementDefinition {
+    pub async fn format(&self, srcom_state: SrComBoardsState, cm_state: CmBoardsState) -> Result<String, RoleManagerError> {
+        Ok(match self {
+            Self::Manual => format!("Manual"),
             Self::Rank(RankRequirement::Srcom { game, category, variables, top }) => {
-                write!(f, "Speedrun.com - {} - {} - Top {}", game, category, top)
+                let game = srcom_state.fetch_game(game.clone()).await?;
+                let category = srcom_state.fetch_category(category.clone()).await?;
+
+                let mut variable_descs = vec![];
+                for id_pair in variables.as_ref().unwrap_or(&vec![]) {
+                    let variable = srcom_state.fetch_variable(id_pair.variable.clone()).await?;
+                    let value = match variable.values.values.get(&id_pair.choice) {
+                        Some(value) => value.clone(),
+                        None => return Err(RoleManagerError::new(format!("Variable value {} is not a choice for variable {}", id_pair.choice.0, id_pair.variable.0)))
+                    };
+
+                    variable_descs.push(format!("{}={}", variable.name, value.label));
+                }
+
+                if variable_descs.is_empty() {
+                    format!("Speedrun.com - {} - {} - Top {}", game.names.international, category.name, top)
+                } else {
+                    format!("Speedrun.com - {} - {} ({}) - Top {}", game.names.international, category.name, variable_descs.join(","), top)
+                }
             },
             Self::Time(TimeRequirement::Srcom { game, category, variables, time}) => {
-                write!(f, "Speedrun.com - {} - {} - Sub {}", game, category, time)
+                let game = srcom_state.fetch_game(game.clone()).await?;
+                let category = srcom_state.fetch_category(category.clone()).await?;
+
+                let mut variable_descs = vec![];
+                for id_pair in variables.as_ref().unwrap_or(&vec![]) {
+                    let variable = srcom_state.fetch_variable(id_pair.variable.clone()).await?;
+                    let value = match variable.values.values.get(&id_pair.choice) {
+                        Some(value) => value.clone(),
+                        None => return Err(RoleManagerError::new(format!("Variable value {} is not a choice for variable {}", id_pair.choice.0, id_pair.variable.0)))
+                    };
+
+                    variable_descs.push(format!("{}={}", variable.name, value.label));
+                }
+
+                if variable_descs.is_empty() {
+                    format!("Speedrun.com - {} - {} - Sub {}", game.names.international, category.name, time)
+                } else {
+                    format!("Speedrun.com - {} - {} ({}) - Sub {}", game.names.international, category.name, variable_descs.join(","), time)
+                }
             },
             Self::Points { leaderboard, points } => {
-                write!(f, "CM - {} - {} Points", leaderboard, points)
+                format!("CM - {} - {} Points", leaderboard, points)
             },
             Self::Recent(RecentRequirement::Cm { months}) => {
-                write!(f, "CM - Activity in last {} months", months)
+                format!("CM - Activity in last {} months", months)
             }
             Self::Recent(RecentRequirement::Srcom { game, category, variables, months}) => {
-                write!(f, "Speedrun.com - {} - {} - Activity in last {} months", game, category, months)
+                let game = srcom_state.fetch_game(game.clone()).await?;
+                let category = srcom_state.fetch_category(category.clone()).await?;
+
+                let mut variable_descs = vec![];
+                for id_pair in variables.as_ref().unwrap_or(&vec![]) {
+                    let variable = srcom_state.fetch_variable(id_pair.variable.clone()).await?;
+                    let value = match variable.values.values.get(&id_pair.choice) {
+                        Some(value) => value.clone(),
+                        None => return Err(RoleManagerError::new(format!("Variable value {} is not a choice for variable {}", id_pair.choice.0, id_pair.variable.0)))
+                    };
+
+                    variable_descs.push(format!("{}={}", variable.name, value.label));
+                }
+
+                if variable_descs.is_empty() {
+                    format!("Speedrun.com - {} - {} - Activity in last {} months", game.names.international, category.name, months)
+                } else {
+                    format!("Speedrun.com - {} - {} ({}) - Activity in last {} months", game.names.international, category.name, variable_descs.join(","), months)
+                }
             }
-        }
+        })
     }
 }
 
@@ -75,8 +134,8 @@ impl Display for CmLeaderboard {
 
 #[derive(Deserialize, Debug)]
 pub struct VariableDefinition {
-    pub variable: String,
-    pub choice: String
+    pub variable: VariableId,
+    pub choice: VariableValueId
 }
 
 #[derive(Deserialize, Debug)]
@@ -92,8 +151,8 @@ pub enum Platform {
 pub enum RecentRequirement {
     #[serde(rename = "srcom")]
     Srcom {
-        game: String,
-        category: String,
+        game: GameId,
+        category: CategoryId,
         variables: Option<Vec<VariableDefinition>>,
         months: u64
     },
@@ -108,8 +167,8 @@ pub enum RecentRequirement {
 pub enum RankRequirement {
     #[serde(rename = "srcom")]
     Srcom {
-        game: String,
-        category: String,
+        game: GameId,
+        category: CategoryId,
         variables: Option<Vec<VariableDefinition>>,
         top: u64
     }
@@ -120,8 +179,8 @@ pub enum RankRequirement {
 pub enum TimeRequirement {
     #[serde(rename = "srcom")]
     Srcom {
-        game: String,
-        category: String,
+        game: GameId,
+        category: CategoryId,
         variables: Option<Vec<VariableDefinition>>,
         time: String
     }

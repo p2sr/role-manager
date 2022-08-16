@@ -9,7 +9,7 @@ use serenity::prelude::*;
 use crate::{CmBoardsState, SrComBoardsState};
 use crate::error::RoleManagerError;
 use crate::analyzer::role_definition::RoleDefinition;
-use crate::analyzer::user::analyze_user;
+use crate::analyzer::user::{analyze_user, ExternalAccount};
 use crate::config::Config;
 
 #[derive(Debug)]
@@ -97,7 +97,9 @@ pub async fn user(
     #[description = "User to analyze"]
     user: Option<User>
 ) -> Result<(), RoleManagerError> {
+    println!("Deferring response");
     ctx.defer().await?;
+    println!("Finished deferring response");
 
     // Download the definition file
     let response = reqwest::get(definition_file.url.clone())
@@ -119,24 +121,42 @@ pub async fn user(
         ctx.data().cm_state.clone()
     ).await?;
 
+    let mut fields: Vec<(String, String)> = Vec::new();
+    for badge in &analysis.badges {
+        let mut requirement_descs = Vec::new();
+        for met_requirement in &badge.met_requirements {
+            requirement_descs.push(format!("{}\n - {}", met_requirement.definition.format(ctx.data().srcom_state.clone(), ctx.data().cm_state.clone()).await?, met_requirement.cause));
+        }
+
+        fields.push((badge.definition.name.clone(), requirement_descs.join("\n")));
+    }
+
     println!("Completed analysis: {:#?}", &analysis);
 
     ctx.send(|response| {
         response.embed(|embed| {
-            let mut builder = embed.description("Badges")
-                .footer(|f| f.text(format!("Context {}", definition_file.filename)))
+            let mut builder = embed.footer(|f| f.text(format!("Context `{}`", definition_file.filename)))
                 .author(|author| {
                     author.name(&user.name.clone())
                         .icon_url(user.avatar_url().unwrap_or(user.default_avatar_url()))
                 });
 
-            for badge in &analysis.badges {
-                let mut requirement_descs = Vec::new();
-                for met_requirement in &badge.met_requirements {
-                    requirement_descs.push(format!("{}\n - {}", met_requirement.definition, met_requirement.cause));
+            let mut account_descs = Vec::new();
+            for external_account in analysis.external_accounts {
+                match external_account {
+                    ExternalAccount::Cm { id, username } => {
+                        account_descs.push(format!("- [{} (Steam)](https://board.portal2.sr/profile/{})", username, id));
+                    }
+                    ExternalAccount::Srcom { id, username, link } => {
+                        account_descs.push(format!("- [{} (Speedrun.com)]({})", username, link));
+                    }
                 }
+            }
 
-                builder = builder.field(&badge.definition.name.clone(), requirement_descs.join("\n"), false);
+            builder = builder.description(format!("**__External Accounts__**\n{}\n**__Badges__**", account_descs.join("\n")));
+
+            for field in fields {
+                builder = builder.field(field.0, field.1, false);
             }
 
             builder

@@ -1,6 +1,5 @@
 use chrono::NaiveDateTime;
 use serde::Deserialize;
-use crate::boards::cm::ActiveProfilesResponse;
 use crate::error::RoleManagerError;
 
 #[derive(Debug)]

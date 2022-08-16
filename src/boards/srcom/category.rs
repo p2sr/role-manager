@@ -1,7 +1,8 @@
 use serde::Deserialize;
 use crate::boards::srcom::Link;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
 pub enum CategoryOrId {
     Id(CategoryId),
     Category { data: Category }
@@ -10,7 +11,7 @@ pub enum CategoryOrId {
 #[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct CategoryId(pub String);
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Category {
     pub id: CategoryId,
     pub name: String,
@@ -23,7 +24,7 @@ pub struct Category {
     pub links: Option<Vec<Link>>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Copy, Clone)]
 #[serde(tag = "type", content = "value")]
 pub enum PlayerCount {
     #[serde(rename = "exactly")]

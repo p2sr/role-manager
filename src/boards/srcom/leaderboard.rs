@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use serde::Deserialize;
-use crate::boards::srcom::category::CategoryId;
+use crate::boards::srcom::category::{CategoryId, CategoryOrId};
 use crate::boards::srcom::game::{GameId, GameOrId};
 use crate::boards::srcom::level::LevelId;
 use crate::boards::srcom::{Link, MultipleItemRequest, TimingMethod};
@@ -14,7 +14,7 @@ use crate::boards::srcom::variable::{Variable, VariableId, VariableValueId};
 pub struct Leaderboard {
     pub weblink: String,
     pub game: GameOrId,
-    pub category: CategoryId,
+    pub category: CategoryOrId,
     pub level: Option<LevelId>,
     pub platform: Option<PlatformId>,
     pub region: Option<RegionId>,
@@ -25,7 +25,7 @@ pub struct Leaderboard {
     pub values: HashMap<VariableId, VariableValueId>,
     pub runs: Vec<LeaderboardPlace>,
     pub links: Option<Vec<Link>>,
-    pub players: Option<MultipleItemRequest<User>>,
+    pub players: Option<MultipleItemRequest<UserOrGuest>>,
     pub variables: Option<MultipleItemRequest<Variable>>
 }
 
@@ -61,5 +61,17 @@ impl Leaderboard {
         }
 
         best_place
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(tag = "rel")]
+pub enum UserOrGuest {
+    #[serde(rename = "user")]
+    User(User),
+    #[serde(rename = "guest")]
+    Guest {
+        name: String,
+        links: Option<Vec<Link>>
     }
 }

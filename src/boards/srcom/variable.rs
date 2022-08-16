@@ -9,7 +9,7 @@ pub struct VariableId(pub String);
 #[derive(Deserialize, Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct VariableValueId(pub String);
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Variable {
     pub id: VariableId,
     pub name: String,
@@ -25,14 +25,14 @@ pub struct Variable {
     pub links: Option<Vec<Link>>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct VariableValue {
     pub label: String,
-    pub rules: String,
-    pub flags: VariableValueFlags
+    pub rules: Option<String>,
+    pub flags: Option<VariableValueFlags>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Copy)]
 #[serde(tag = "type")]
 pub enum VariableScope {
     #[serde(rename = "global")]
@@ -45,13 +45,13 @@ pub enum VariableScope {
     SingleLevel
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct VariableValues {
     pub values: HashMap<VariableValueId, VariableValue>,
-    pub default: VariableValueId
+    pub default: Option<VariableValueId>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Copy, Clone)]
 pub struct VariableValueFlags {
-    pub miscellaneous: bool
+    pub miscellaneous: Option<bool>
 }

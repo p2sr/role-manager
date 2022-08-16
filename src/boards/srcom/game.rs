@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use crate::boards::srcom::{Asset, Link, TimingMethod};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
 pub enum GameOrId {
     Id(GameId),
     Game {
@@ -13,12 +14,17 @@ pub enum GameOrId {
 #[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct GameId(pub String);
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Game {
     pub id: GameId,
     pub names: Names,
+    #[serde(rename = "boostReceived")]
+    pub boosts_received: u64,
+    #[serde(rename = "boostDistinctDonors")]
+    pub boost_distinct_donors: u64,
     pub abbreviation: String,
     pub weblink: String,
+    pub discord: Option<String>,
     pub released: u16,
     #[serde(rename = "release-date")]
     pub release_date: String,
@@ -37,14 +43,14 @@ pub struct Game {
     pub links: Option<Vec<Link>>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Names {
     pub international: String,
     pub japanese: Option<String>,
     pub twitch: String
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Ruleset {
     #[serde(rename = "show-milliseconds")]
     pub show_milliseconds: bool,
@@ -60,31 +66,36 @@ pub struct Ruleset {
     pub emulators_allowed: bool
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Assets {
-    pub logo: Asset,
+    pub logo: GameAsset,
     #[serde(rename = "cover-tiny")]
-    pub cover_tiny: Asset,
+    pub cover_tiny: GameAsset,
     #[serde(rename = "cover-small")]
-    pub cover_small: Asset,
+    pub cover_small: GameAsset,
     #[serde(rename = "cover-medium")]
-    pub cover_medium: Asset,
+    pub cover_medium: GameAsset,
     #[serde(rename = "cover-large")]
-    pub cover_large: Asset,
-    pub icon: Asset,
+    pub cover_large: GameAsset,
+    pub icon: GameAsset,
     #[serde(rename = "trophy-1st")]
-    pub trophy_1st: Asset,
+    pub trophy_1st: GameAsset,
     #[serde(rename = "trophy-2nd")]
-    pub trophy_2nd: Asset,
+    pub trophy_2nd: GameAsset,
     #[serde(rename = "trophy-3rd")]
-    pub trophy_3rd: Asset,
+    pub trophy_3rd: GameAsset,
     #[serde(rename = "trophy-4th")]
-    pub trophy_4th: Option<Asset>,
-    pub background: Option<Asset>,
-    pub foreground: Option<Asset>
+    pub trophy_4th: Option<GameAsset>,
+    pub background: Option<GameAsset>,
+    pub foreground: Option<GameAsset>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
+pub struct GameAsset {
+    pub uri: Option<String>
+}
+
+#[derive(Deserialize, Debug, Copy, Clone)]
 pub enum ModeratorRole {
     #[serde(rename = "moderator")]
     Moderator,

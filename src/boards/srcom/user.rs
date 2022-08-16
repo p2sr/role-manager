@@ -4,7 +4,7 @@ use crate::boards::srcom::Link;
 #[derive(Deserialize, Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct UserId(pub String);
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct User {
     pub id: UserId,
     pub names: Names,
@@ -21,13 +21,13 @@ pub struct User {
     pub links: Option<Vec<Link>>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Names {
     pub international: String,
     pub japanese: Option<String>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "style")]
 pub enum NameStyle {
     #[serde(rename = "gradient")]
@@ -41,13 +41,13 @@ pub enum NameStyle {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct NameStyleColor {
     pub light: String,
     pub dark: String
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Copy, Clone)]
 pub enum UserRole {
     #[serde(rename = "banned")]
     Banned,
@@ -63,19 +63,19 @@ pub enum UserRole {
     Programmer
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct UserLocation {
     country: UserLocationSpec,
     region: Option<UserLocationSpec>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct UserLocationSpec {
     code: String,
     names: Names
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct UserConnection {
     uri: String
 }

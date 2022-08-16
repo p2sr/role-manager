@@ -25,11 +25,12 @@ use crate::model::lumadb::verified_connections;
 pub enum ExternalAccount {
     Srcom {
         username: String,
-        id: String
+        id: UserId,
+        link: String
     },
     Cm {
         username: String,
-        id: String
+        id: i64
     }
 }
 
@@ -76,13 +77,13 @@ impl Display for MetRequirementCause {
                 write!(f, "[#{} - {} ({})]({})", rank, time, achieved_on, link)
             }
             Self::CmAggregate { steam_id, board } => {
-                write!(f, "CM Aggregate {}", board)
+                write!(f, "[CM Aggregate {}](https://board.portal2.sr/profile/{})", board, steam_id)
             }
             Self::CmRun { steam_id, chapter, chamber, rank, time, achieved_on } => {
                 write!(f, "{}/{} - #{} - {} ({})", chapter, chamber, rank, time, achieved_on)
             }
             Self::CmActivity { steam_id } => {
-                write!(f, "CM Activity")
+                write!(f, "[CM Activity](https://board.portal2.sr/profile/{})", steam_id)
             }
         }
     }
@@ -100,11 +101,23 @@ fn fullgame_cause(user: &UserId, place: LeaderboardPlace) -> Result<MetRequireme
         }
     };
 
+    let total_seconds = place.run.times.primary_t as u64;
+    let hours = total_seconds / (60 * 60);
+    let minutes = (total_seconds % (60 * 60)) / 60;
+    let seconds = total_seconds % 60;
+    let milliseconds = ((place.run.times.primary_t - (total_seconds as f64)) * 1_000.0) as u64;
+
+    let duration = if hours == 0 {
+        format!("{}:{}.{}", minutes, seconds, milliseconds)
+    } else {
+        format!("{}:{}:{}.{}", hours, minutes, seconds, milliseconds)
+    };
+
     Ok(MetRequirementCause::FullgameRun {
         srcom_id: user.clone(),
         link: place.run.weblink,
         rank: place.place as u32,
-        time: place.run.times.primary,
+        time: duration,
         achieved_on: date
     })
 }
@@ -171,12 +184,12 @@ pub async fn analyze_user<'a>(
                             match variables {
                                 Some(v) => {
                                     for var in v {
-                                        variable_map.insert(VariableId(var.variable.clone()), VariableValueId(var.choice.clone()));
+                                        variable_map.insert(var.variable.clone(), var.choice.clone());
                                     }
                                 }
                                 None => {}
                             }
-                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(GameId(game.clone()), CategoryId(category.clone()), variable_map).await?;
+                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(game.clone(), category.clone(), variable_map).await?;
 
                             for srcom in &srcom_ids {
                                 match leaderboard.get_highest_run(&srcom) {
@@ -206,12 +219,12 @@ pub async fn analyze_user<'a>(
                             match variables {
                                 Some(v) => {
                                     for var in v {
-                                        variable_map.insert(VariableId(var.variable.clone()), VariableValueId(var.choice.clone()));
+                                        variable_map.insert(var.variable.clone(), var.choice.clone());
                                     }
                                 }
                                 None => {}
                             }
-                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(GameId(game.clone()), CategoryId(category.clone()), variable_map).await?;
+                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(game.clone(),category.clone(), variable_map).await?;
 
                             for srcom in &srcom_ids {
                                 match leaderboard.get_highest_run(&srcom) {
@@ -258,12 +271,12 @@ pub async fn analyze_user<'a>(
                             match variables {
                                 Some(v) => {
                                     for var in v {
-                                        variable_map.insert(VariableId(var.variable.clone()), VariableValueId(var.choice.clone()));
+                                        variable_map.insert(VariableId(var.variable.0.clone()), VariableValueId(var.choice.0.clone()));
                                     }
                                 }
                                 None => {}
                             }
-                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(GameId(game.clone()), CategoryId(category.clone()), variable_map).await?;
+                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(game.clone(), category.clone(), variable_map).await?;
 
                             for srcom in &srcom_ids {
                                 match leaderboard.get_highest_run(&srcom) {
@@ -318,11 +331,27 @@ pub async fn analyze_user<'a>(
     }
 
     // Accumulate info about external accounts (Should be cached now that we've requested LBs)
+    let mut external_accounts = Vec::new();
+
+    for steam_id in &steam_ids {
+        external_accounts.push(ExternalAccount::Cm {
+            id: *steam_id,
+            username: cm_boards.fetch_profile(*steam_id).await?.board_name.unwrap_or(steam_id.to_string())
+        });
+    }
+    for srcom_id in &srcom_ids {
+        let user = srcom_boards.fetch_user(srcom_id.clone()).await?;
+        external_accounts.push(ExternalAccount::Srcom {
+            id: srcom_id.clone(),
+            username: user.names.international,
+            link: user.weblink
+        })
+    }
 
 
     Ok(AnalyzedUser {
         discord_user: discord_user.clone(),
-        external_accounts: vec![],
+        external_accounts,
         badges: analyzed_badges
     })
 }

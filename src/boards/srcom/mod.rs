@@ -21,13 +21,13 @@ use tower::Service;
 use tower::ServiceExt;
 use crate::boards::srcom::category::{Category, CategoryId, CategoryOrId};
 use crate::boards::srcom::game::{Game, GameId, GameOrId};
-use crate::boards::srcom::leaderboard::Leaderboard;
+use crate::boards::srcom::leaderboard::{Leaderboard, UserOrGuest};
 use crate::boards::srcom::level::LevelId;
 use crate::boards::srcom::user::{User, UserId};
 use crate::boards::srcom::variable::{Variable, VariableId, VariableValueId};
 use crate::error::RoleManagerError;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Asset {
     pub uri: String,
     pub width: u32,
@@ -40,7 +40,7 @@ pub struct Link {
     pub uri: String
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Copy)]
 pub enum TimingMethod {
     #[serde(rename = "realtime")]
     RealTime,
@@ -169,13 +169,13 @@ impl SrComBoardsState {
                 }.map_err(|err| RoleManagerError::new(format!("Failed to build API request to speedrun.com: {}", err)))?;
 
                 let mut client = self.rate_limited_client.lock().await;
-                let request_builder = client.ready().await
+                let mut request_builder = client.ready().await
                     .map_err(|err| RoleManagerError::new(format!("Failed to obtain ticket for sending requests to speedrun.com: {}", err)))?
                     .get_ref().get(endpoint_url)
                     .query(&[("embed", "game,category,players,variables")]);
 
-                for var_pair in def.variables {
-                    request_builder.query(&[var_pair])
+                for var_pair in &def.variables {
+                    request_builder = request_builder.query(&[(format!("var-{}", var_pair.0.0.clone()).as_str(), var_pair.1.0.clone().as_str())]);
                 }
 
                 let response: Response = request_builder.send().await
@@ -205,10 +205,12 @@ impl SrComBoardsState {
                 }
                 if let Some(MultipleItemRequest { data }) = &leaderboard.players {
                     for user in data {
-                        cached_users.insert(user.id.clone(), CachedUser {
-                            user: user.clone(),
-                            fetched_at: Utc::now().naive_utc()
-                        });
+                        if let UserOrGuest::User(user) = user {
+                            cached_users.insert(user.id.clone(), CachedUser {
+                                user: user.clone(),
+                                fetched_at: Utc::now().naive_utc()
+                            });
+                        }
                     }
                 }
                 if let Some(MultipleItemRequest { data }) = &leaderboard.variables {
@@ -412,12 +414,12 @@ struct CachedVariable {
     fetched_at: NaiveDateTime
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct SingleItemRequest<T> {
     data: T
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct MultipleItemRequest<T> {
     data: Vec<T>
 }
