@@ -1,18 +1,9 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use std::sync::Arc;
-use chrono::{Date, DateTime, Duration, NaiveDateTime, TimeZone, Utc};
-use sea_orm::DatabaseConnection;
-use sea_orm::EntityTrait;
-use sea_orm::QueryFilter;
-use sea_orm::ColumnTrait;
+use chrono::{Duration, NaiveDateTime, Utc};
 use serenity::model::user::User;
-use tokio::sync::Mutex;
 use crate::analyzer::role_definition::{BadgeDefinition, CmLeaderboard, RankRequirement, RecentRequirement, RequirementDefinition, RoleDefinition, TimeRequirement};
 use crate::analyzer::user::MetRequirementCause::CmActivity;
-use crate::boards::srcom;
-use crate::boards::srcom::category::CategoryId;
-use crate::boards::srcom::game::GameId;
 use crate::boards::srcom::leaderboard::LeaderboardPlace;
 use crate::boards::srcom::SrComBoardsState;
 use crate::boards::srcom::user::UserId;
@@ -74,7 +65,7 @@ impl Display for MetRequirementCause {
                     None => write!(f, "Assigned {}", assigned_on)
                 }
             }
-            Self::FullgameRun { srcom_id, link, rank, time, achieved_on } => {
+            Self::FullgameRun { link, rank, time, achieved_on, .. } => {
                 write!(f, "[#{} - {}]({})", rank, time, link)
             }
             Self::CmAggregate { steam_id, board, points } => {
@@ -188,10 +179,15 @@ pub async fn analyze_user<'a>(
                                 }
                                 None => {}
                             }
-                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(game.clone(), category.clone(), variable_map).await?;
 
                             for srcom in &srcom_ids {
-                                match leaderboard.get_highest_run(&srcom, partner) {
+                                match srcom_boards.fetch_user_highest_run(
+                                    srcom,
+                                    partner,
+                                    game.clone(),
+                                    category.clone(),
+                                    variable_map.clone()
+                                ).await? {
                                     Some(run) => {
                                         if run.place <= *top {
                                             met_requirements.push(MetRequirement {
@@ -223,10 +219,15 @@ pub async fn analyze_user<'a>(
                                 }
                                 None => {}
                             }
-                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(game.clone(),category.clone(), variable_map).await?;
 
                             for srcom in &srcom_ids {
-                                match leaderboard.get_highest_run(&srcom, partner) {
+                                match srcom_boards.fetch_user_highest_run(
+                                    srcom,
+                                    partner,
+                                    game.clone(),
+                                    category.clone(),
+                                    variable_map.clone()
+                                ).await? {
                                     Some(run) => {
                                         if run.run.times.primary_t <= seconds as f64 {
                                             met_requirements.push(MetRequirement {
@@ -266,7 +267,7 @@ pub async fn analyze_user<'a>(
                 }
                 RequirementDefinition::Recent(recent) => {
                     match recent {
-                        RecentRequirement::Srcom { game, category, variables, months } => {
+                        RecentRequirement::Srcom { game, category, variables, .. } => {
                             let mut variable_map = BTreeMap::new();
                             match variables {
                                 Some(v) => {
@@ -276,10 +277,14 @@ pub async fn analyze_user<'a>(
                                 }
                                 None => {}
                             }
-                            let leaderboard = srcom_boards.fetch_leaderboard_with_variables(game.clone(), category.clone(), variable_map).await?;
-
                             for srcom in &srcom_ids {
-                                match leaderboard.get_highest_run(&srcom, &None) {
+                                match srcom_boards.fetch_user_highest_run(
+                                    srcom,
+                                    &None,
+                                    game.clone(),
+                                    category.clone(),
+                                    variable_map.clone()
+                                ).await? {
                                     Some(run) => {
                                         match &run.run.date {
                                             Some(date_text) => {

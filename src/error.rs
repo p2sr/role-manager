@@ -16,7 +16,7 @@ impl RoleManagerError {
         }
     }
 
-    pub fn newEdit(cause: String) -> Self {
+    pub fn new_edit(cause: String) -> Self {
         RoleManagerError {
             cause,
             report_via_edit: true

@@ -13,15 +13,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use chrono::{NaiveDateTime, Utc};
 use chrono::Duration as ChronoDuration;
-use reqwest::{Client, Method, Request, RequestBuilder, Response, Url};
-use serde::{Deserialize, Deserializer};
+use reqwest::{Client, Method, Request, Response, Url};
+use serde::{Deserialize};
 use tokio::sync::Mutex;
 use tower::limit::RateLimit;
 use tower::Service;
 use tower::ServiceExt;
+use crate::analyzer::role_definition::PartnerRestriction;
 use crate::boards::srcom::category::{Category, CategoryId, CategoryOrId};
 use crate::boards::srcom::game::{Game, GameId, GameOrId};
-use crate::boards::srcom::leaderboard::{Leaderboard, UserOrGuest};
+use crate::boards::srcom::leaderboard::{Leaderboard, LeaderboardPlace, UserOrGuest};
 use crate::boards::srcom::level::LevelId;
 use crate::boards::srcom::user::{User, UserId};
 use crate::boards::srcom::variable::{Variable, VariableId, VariableValueId};
@@ -59,12 +60,14 @@ pub struct SrComBoardsState {
     cached_games: Arc<Mutex<HashMap<GameId, CachedGame>>>,
     cached_categories: Arc<Mutex<HashMap<CategoryId, CachedCategory>>>,
     cached_users: Arc<Mutex<HashMap<UserId, CachedUser>>>,
-    cached_variables: Arc<Mutex<HashMap<VariableId, CachedVariable>>>
+    cached_variables: Arc<Mutex<HashMap<VariableId, CachedVariable>>>,
+
+    leaderboard_place_lookup_cache: Arc<Mutex<HashMap<BoardDefinition, HashMap<(UserId, Option<PartnerRestriction>), Option<LeaderboardPlace>>>>>
 }
 
 impl SrComBoardsState {
     pub fn new(cache_persist_time: ChronoDuration) -> SrComBoardsState {
-        let mut svc = tower::ServiceBuilder::new()
+        let svc = tower::ServiceBuilder::new()
             .rate_limit(100, Duration::from_secs(60))
             .service(Client::new());
 
@@ -75,8 +78,39 @@ impl SrComBoardsState {
             cached_games: Arc::new(Mutex::new(HashMap::new())),
             cached_categories: Arc::new(Mutex::new(HashMap::new())),
             cached_users: Arc::new(Mutex::new(HashMap::new())),
-            cached_variables: Arc::new(Mutex::new(HashMap::new()))
+            cached_variables: Arc::new(Mutex::new(HashMap::new())),
+            leaderboard_place_lookup_cache: Arc::new(Mutex::new(HashMap::new()))
         }
+    }
+
+    pub async fn fetch_user_highest_run(
+        &self,
+        user_id: &UserId,
+        partner_restriction: &Option<PartnerRestriction>,
+        game: GameId,
+        category: CategoryId,
+        variable_map: BTreeMap<VariableId, VariableValueId>
+    ) -> Result<Option<LeaderboardPlace>, RoleManagerError> {
+        let board_definition = BoardDefinition {
+            game,
+            category,
+            level: None,
+            variables: variable_map
+        };
+
+        let mut cache_map = self.leaderboard_place_lookup_cache.lock().await;
+        let boards_cache = match cache_map.get_mut(&board_definition) {
+            Some(cache) => cache,
+            None => {
+                cache_map.insert(board_definition.clone(), HashMap::new());
+                cache_map.get_mut(&board_definition).unwrap()
+            }
+        };
+
+        let leaderboard = self.fetch_leaderboard_by_definition(board_definition)
+            .await?;
+
+        Ok(leaderboard.get_highest_run(user_id, partner_restriction, boards_cache))
     }
 
     pub async fn fetch_leaderboard(
@@ -376,7 +410,7 @@ impl SrComBoardsState {
     }
 }
 
-#[derive(Debug, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Ord, PartialOrd, Eq, PartialEq)]
 struct BoardDefinition {
     game: GameId,
     category: CategoryId,

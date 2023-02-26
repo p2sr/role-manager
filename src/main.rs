@@ -9,14 +9,8 @@ use std::sync::Arc;
 use chrono::Duration;
 
 use sea_orm::{Database, DatabaseConnection};
-use serenity::model::id::GuildId;
-use serenity::prelude::{Client, GatewayIntents};
-use tokio::sync::Mutex;
-use tokio::time;
 use crate::boards::cm::CmBoardsState;
 use crate::boards::srcom::SrComBoardsState;
-
-use crate::bot::{BotState};
 
 #[tokio::main]
 async fn main() {

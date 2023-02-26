@@ -198,7 +198,7 @@ pub enum TimeRequirement {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Deserialize, Debug, Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub enum PartnerRestriction {
     #[serde(rename = "rank>=")]
     RankGte

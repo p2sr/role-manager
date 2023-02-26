@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use serde::Deserialize;
-use crate::boards::srcom::{Asset, Link, TimingMethod};
+use crate::boards::srcom::{Link, TimingMethod};
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]

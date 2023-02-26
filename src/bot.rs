@@ -6,11 +6,7 @@ use sea_orm::DatabaseConnection;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
 use sea_orm::ColumnTrait;
-use serenity::async_trait;
-use serenity::http::CacheHttp;
-use serenity::model::application::interaction::Interaction;
 use serenity::model::prelude::*;
-use serenity::prelude::*;
 
 use crate::{CmBoardsState, SrComBoardsState};
 use crate::error::RoleManagerError;
@@ -86,12 +82,12 @@ async fn analyze(
 
     // Download the definition file
     let response = reqwest::get(definition_file.url.clone())
-        .await.map_err(|err| RoleManagerError::newEdit(format!("Failed to download provided role definition file: {}", err)))?
-        .text().await.map_err(|err| RoleManagerError::newEdit(format!("Failed to interpret provided role definition file download: {}", err)))?;
+        .await.map_err(|err| RoleManagerError::new_edit(format!("Failed to download provided role definition file: {}", err)))?
+        .text().await.map_err(|err| RoleManagerError::new_edit(format!("Failed to interpret provided role definition file download: {}", err)))?;
     let response_str = response.as_str();
 
     let definition: RoleDefinition = json5::from_str(response_str)
-        .map_err(|err| RoleManagerError::newEdit(format!("Invalid role definition file: {}", err)))?;
+        .map_err(|err| RoleManagerError::new_edit(format!("Invalid role definition file: {}", err)))?;
 
     let mut badges = HashMap::new();
 
@@ -233,12 +229,12 @@ pub async fn user(
 
     // Download the definition file
     let response = reqwest::get(definition_file.url.clone())
-        .await.map_err(|err| RoleManagerError::newEdit(format!("Failed to download provided role definition file: {}", err)))?
-        .text().await.map_err(|err| RoleManagerError::newEdit(format!("Failed to interpret provided role definition file download: {}", err)))?;
+        .await.map_err(|err| RoleManagerError::new_edit(format!("Failed to download provided role definition file: {}", err)))?
+        .text().await.map_err(|err| RoleManagerError::new_edit(format!("Failed to interpret provided role definition file download: {}", err)))?;
     let response_str = response.as_str();
 
     let definition: RoleDefinition = json5::from_str(response_str)
-        .map_err(|err| RoleManagerError::newEdit(format!("Invalid role definition file: {}", err)))?;
+        .map_err(|err| RoleManagerError::new_edit(format!("Invalid role definition file: {}", err)))?;
 
     let user = user.as_ref().unwrap_or(ctx.author());
 
@@ -286,7 +282,7 @@ pub async fn user(
                     ExternalAccount::Cm { id, username } => {
                         account_descs.push(format!("- [{} (Steam)](https://board.portal2.sr/profile/{})", username, id));
                     }
-                    ExternalAccount::Srcom { id, username, link } => {
+                    ExternalAccount::Srcom { username, link, .. } => {
                         account_descs.push(format!("- [{} (Speedrun.com)]({})", username, link));
                     }
                 }

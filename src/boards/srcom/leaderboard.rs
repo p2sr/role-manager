@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use serde::Deserialize;
 use crate::analyzer::role_definition::PartnerRestriction;
-use crate::boards::srcom::category::{CategoryId, CategoryOrId};
-use crate::boards::srcom::game::{GameId, GameOrId};
+use crate::boards::srcom::category::{CategoryOrId};
+use crate::boards::srcom::game::{GameOrId};
 use crate::boards::srcom::level::LevelId;
 use crate::boards::srcom::{Link, MultipleItemRequest, TimingMethod};
 use crate::boards::srcom::platform::PlatformId;
@@ -37,7 +37,12 @@ pub struct LeaderboardPlace {
 }
 
 impl Leaderboard {
-    pub fn get_highest_run(&self, user_id: &UserId, partner_restriction: &Option<PartnerRestriction>) -> Option<LeaderboardPlace> {
+    pub fn get_highest_run(&self, user_id: &UserId, partner_restriction: &Option<PartnerRestriction>, user_highest_run_cache: &mut HashMap<(UserId, Option<PartnerRestriction>), Option<LeaderboardPlace>>) -> Option<LeaderboardPlace> {
+        if let Some(highest_run) = user_highest_run_cache
+            .get(&(user_id.clone(), *partner_restriction)) {
+            return highest_run.clone();
+        }
+
         let mut best_place: Option<LeaderboardPlace> = None;
 
         for run in &self.runs {
@@ -51,7 +56,7 @@ impl Leaderboard {
                         // Check this user against the partner restriction
                         match partner_restriction {
                             Some(PartnerRestriction::RankGte) => {
-                                match self.get_highest_run(id, &None) {
+                                match self.get_highest_run(id, &None, user_highest_run_cache) {
                                     Some(partner_place) => {
                                         if partner_place.place < run.place {
                                             other_players_meet_restriction = false;
@@ -77,6 +82,9 @@ impl Leaderboard {
                 }
             }
         }
+
+        user_highest_run_cache
+            .insert((user_id.clone(), *partner_restriction), best_place.clone());
 
         best_place
     }

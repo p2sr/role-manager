@@ -35,7 +35,7 @@ pub struct Run {
 #[derive(Deserialize, Debug, Clone)]
 pub struct RunVideos {
     pub text: Option<String>,
-    pub links: Vec<RunVideoLink>
+    pub links: Option<Vec<RunVideoLink>>
 }
 
 #[derive(Deserialize, Debug, Clone)]
