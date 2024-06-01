@@ -116,7 +116,7 @@ async fn analyze(
     ctx.send(|response| {
         response.embed(|embed| {
             let mut builder = embed.title("Role Definition Summary")
-                .description(format!("Analyzed **{} Users** ({} CM, {} SRcom)", total_users, steam_users, srcom_users))
+                .description(format!("Analyzed **{} Users** ({} CM, {} SRC)", total_users, steam_users, srcom_users))
                 .footer(|f| f.text(format!("Context: {}", definition_file.filename)));
 
             for field in fields {
@@ -129,8 +129,6 @@ async fn analyze(
             filename: definition_file.filename
         })
     }).await?;
-
-    std::process::exit(0);
 
     Ok(())
 }

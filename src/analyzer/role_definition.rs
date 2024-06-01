@@ -87,9 +87,9 @@ impl RequirementDefinition {
                 };
 
                 if variable_descs.is_empty() {
-                    format!("Speedrun.com - {} - {} - Sub {}{}", game.names.international, category.name, time, restriction)
+                    format!("SRC - {} - {} - Sub {}{}", game.names.international, category.name, time, restriction)
                 } else {
-                    format!("Speedrun.com - {} - {} ({}) - Sub {}{}", game.names.international, category.name, variable_descs.join(","), time, restriction)
+                    format!("SRC - {} - {} ({}) - Sub {}{}", game.names.international, category.name, variable_descs.join(","), time, restriction)
                 }
             },
             Self::Points { leaderboard, points } => {
@@ -110,13 +110,13 @@ impl RequirementDefinition {
                         None => return Err(RoleManagerError::new(format!("Variable value {} is not a choice for variable {}", id_pair.choice.0, id_pair.variable.0)))
                     };
 
-                    variable_descs.push(format!("{}={}", variable.name, value.label));
+                    variable_descs.push(format!("{}", value.label));
                 }
 
                 if variable_descs.is_empty() {
-                    format!("Speedrun.com - {} - {} - Activity in last {} months", game.names.international, category.name, months)
+                    format!("SRC - {} - {} - Activity in last {} months", game.names.international, category.name, months)
                 } else {
-                    format!("Speedrun.com - {} - {} ({}) - Activity in last {} months", game.names.international, category.name, variable_descs.join(","), months)
+                    format!("SRC - {} - {} ({}) - Activity in last {} months", game.names.international, category.name, variable_descs.join(","), months)
                 }
             }
         })
@@ -136,9 +136,9 @@ pub enum CmLeaderboard {
 impl Display for CmLeaderboard {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Overall => write!(f, "overall"),
-            Self::SinglePlayer => write!(f, "sp"),
-            Self::Coop => write!(f, "coop")
+            Self::Overall => write!(f, "Overall"),
+            Self::SinglePlayer => write!(f, "SP"),
+            Self::Coop => write!(f, "Co-op")
         }
     }
 }
