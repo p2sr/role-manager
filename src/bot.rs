@@ -8,7 +8,9 @@ use sea_orm::QueryFilter;
 use sea_orm::ColumnTrait;
 use serenity::model::prelude::*;
 
-use crate::{CmBoardsState, SrComBoardsState};
+use crate::analyzer;
+use crate::boards::cm::CmBoardsState;
+use crate::boards::srcom::SrComBoardsState;
 use crate::error::RoleManagerError;
 use crate::analyzer::role_definition::{RequirementDefinition, RoleDefinition};
 use crate::analyzer::user::{analyze_user, ExternalAccount};
@@ -66,10 +68,6 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state
     framework.run_autosharded().await.unwrap();
 }
 
-struct BadgeAnalysis {
-    count: u32,
-    requirement_counts: HashMap<RequirementDefinition, u32>
-}
 
 /// Provides a general analysis of a skill role file
 #[poise::command(slash_command)]
@@ -88,24 +86,6 @@ async fn analyze(
 
     let definition: RoleDefinition = json5::from_str(response_str)
         .map_err(|err| RoleManagerError::new_edit(format!("Invalid role definition file: {}", err)))?;
-
-    let mut badges = HashMap::new();
-
-    for badge in &definition.badges {
-        let mut reqs = HashMap::new();
-        for req in &badge.requirements {
-            reqs.insert(req.clone(), 0);
-        }
-
-        badges.insert(badge.clone(), BadgeAnalysis {
-            count: 0,
-            requirement_counts: reqs
-        });
-    }
-
-    let mut total_users = 0;
-    let mut steam_users = 0;
-    let mut srcom_users = 0;
 
     // Request relevant (steam,srcom) accounts from database
     let connections: Vec<verified_connections::Model> = verified_connections::Entity::find()
@@ -131,68 +111,7 @@ async fn analyze(
         }
     }
 
-    let mut i = 0;
-    for user in &users {
-        if i % 100 == 0 {
-            println!("Analyzing user {}/{}", i, &users.len());
-        }
-        i += 1;
-
-        let analysis = analyze_user(
-            &user.user,
-            &definition,
-            &connections,
-            ctx.data().srcom_state.clone(),
-            ctx.data().cm_state.clone(),
-            false
-        ).await?;
-
-        total_users += 1;
-        let mut found_steam = false;
-        let mut found_srcom = false;
-        for ext in analysis.external_accounts {
-            match ext {
-                ExternalAccount::Cm {..} => {
-                    if !found_steam {
-                        steam_users += 1;
-                        found_steam = true;
-                    }
-                },
-                ExternalAccount::Srcom {..} => {
-                    if !found_srcom {
-                        srcom_users += 1;
-                        found_srcom = true;
-                    }
-                }
-            }
-        }
-
-        for badge in &analysis.badges {
-            let summary = badges.get_mut(badge.definition).unwrap();
-
-            summary.count += 1;
-
-            for req in &badge.met_requirements {
-                let req_summary = summary.requirement_counts.get_mut(req.definition).unwrap();
-
-                *req_summary += 1;
-            }
-        }
-    }
-
-    let mut fields: Vec<(String, String)> = Vec::new();
-    for badge in &definition.badges {
-        let summary = badges.get(badge).unwrap();
-
-        let mut requirement_descs = Vec::new();
-        for req in &badge.requirements {
-            let req_summary = summary.requirement_counts.get(req).unwrap();
-
-            requirement_descs.push(format!("{} - **{}/{}**", req.format(ctx.data().srcom_state.clone(), ctx.data().cm_state.clone()).await?, req_summary, summary.count))
-        }
-
-        fields.push((format!("{} - {}", badge.name, summary.count), requirement_descs.join("\n")))
-    }
+    let (fields, total_users, steam_users, srcom_users) = analyzer::full_analysis(definition, connections, users, ctx.data().srcom_state.clone(), ctx.data().cm_state.clone()).await?;
 
     ctx.send(|response| {
         response.embed(|embed| {

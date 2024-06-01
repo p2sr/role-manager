@@ -1,17 +1,17 @@
-mod boards;
-mod bot;
-mod config;
-mod error;
-mod analyzer;
-mod model;
-mod multikey_hashmap;
+use role_manager::boards as boards;
+use role_manager::bot as bot;
+use role_manager::config as config;
+use role_manager::error as error;
+use role_manager::analyzer as analyzer;
+use role_manager::model as model;
+use role_manager::multikey_hashmap as multikey_hashmap;
 
 use std::sync::Arc;
 use chrono::Duration;
 
 use sea_orm::{Database, DatabaseConnection};
-use crate::boards::cm::CmBoardsState;
-use crate::boards::srcom::SrComBoardsState;
+use role_manager::boards::cm::CmBoardsState;
+use role_manager::boards::srcom::SrComBoardsState;
 
 #[tokio::main]
 async fn main() {

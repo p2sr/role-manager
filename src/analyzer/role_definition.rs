@@ -1,12 +1,13 @@
 use std::fmt::{Display, Formatter};
 use serde::{Deserialize};
-use crate::{CmBoardsState, SrComBoardsState};
+use crate::boards::cm::CmBoardsState;
+use crate::boards::srcom::SrComBoardsState;
 use crate::boards::srcom::category::CategoryId;
 use crate::boards::srcom::game::GameId;
 use crate::boards::srcom::variable::{VariableId, VariableValueId};
 use crate::error::RoleManagerError;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct RoleDefinition {
     pub badges: Vec<BadgeDefinition>
 }

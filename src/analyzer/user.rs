@@ -8,7 +8,7 @@ use crate::boards::srcom::leaderboard::LeaderboardPlace;
 use crate::boards::srcom::SrComBoardsState;
 use crate::boards::srcom::user::UserId;
 use crate::boards::srcom::variable::{VariableId, VariableValueId};
-use crate::CmBoardsState;
+use crate::boards::cm::CmBoardsState;
 use crate::error::RoleManagerError;
 use crate::model::lumadb::verified_connections;
 
