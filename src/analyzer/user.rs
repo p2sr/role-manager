@@ -354,7 +354,7 @@ pub async fn analyze_user<'a>(
     for srcom_id in &srcom_ids {
         let (username, link) = if requires_external_details {
             let user = srcom_boards.fetch_user(srcom_id.clone()).await?;
-            (user.names.international, user.weblink)
+            ((&user.names.international).clone(), (&user.weblink).clone())
         } else {
             (srcom_id.0.clone(), srcom_id.0.clone())
         };

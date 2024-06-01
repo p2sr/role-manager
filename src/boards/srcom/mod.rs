@@ -117,7 +117,7 @@ impl SrComBoardsState {
         &self,
         game: GameId,
         category: CategoryId
-    ) -> Result<Leaderboard, RoleManagerError> {
+    ) -> Result<Arc<Leaderboard>, RoleManagerError> {
         self.fetch_leaderboard_by_definition(BoardDefinition {
             game,
             category,
@@ -131,7 +131,7 @@ impl SrComBoardsState {
         game: GameId,
         category: CategoryId,
         level: LevelId
-    ) -> Result<Leaderboard, RoleManagerError> {
+    ) -> Result<Arc<Leaderboard>, RoleManagerError> {
         self.fetch_leaderboard_by_definition(BoardDefinition {
             game,
             category,
@@ -145,7 +145,7 @@ impl SrComBoardsState {
         game: GameId,
         category: CategoryId,
         variables: BTreeMap<VariableId, VariableValueId>
-    ) -> Result<Leaderboard, RoleManagerError> {
+    ) -> Result<Arc<Leaderboard>, RoleManagerError> {
         self.fetch_leaderboard_by_definition(BoardDefinition {
             game,
             category,
@@ -160,7 +160,7 @@ impl SrComBoardsState {
         category: CategoryId,
         level: LevelId,
         variables: BTreeMap<VariableId, VariableValueId>
-    ) -> Result<Leaderboard, RoleManagerError> {
+    ) -> Result<Arc<Leaderboard>, RoleManagerError> {
         self.fetch_leaderboard_by_definition(BoardDefinition {
             game,
             category,
@@ -172,7 +172,7 @@ impl SrComBoardsState {
     async fn fetch_leaderboard_by_definition(
         &self,
         def: BoardDefinition
-    ) -> Result<Leaderboard, RoleManagerError> {
+    ) -> Result<Arc<Leaderboard>, RoleManagerError> {
         let mut cached_boards = self.cached_boards.lock().await;
         let mut cached_games = self.cached_games.lock().await;
         let mut cached_categories = self.cached_categories.lock().await;
@@ -183,7 +183,7 @@ impl SrComBoardsState {
             c.fetched_at.checked_add_signed(self.cache_persist_time).map(|t| t > Utc::now().naive_utc()).unwrap_or(false)
         }) {
             Some(cached_board) => {
-                Ok(cached_board.leaderboard.clone())
+                Ok(Arc::clone(&cached_board.leaderboard))
             }
             None => {
                 let endpoint_url = match &def.level {
@@ -215,25 +215,25 @@ impl SrComBoardsState {
                 let response: Response = request_builder.send().await
                     .map_err(|err| RoleManagerError::new(format!("Failed to send request to speedrun.com: {}", err)))?;
 
-                let leaderboard = response.json::<SingleItemRequest<Leaderboard>>()
+                let leaderboard = Arc::new(response.json::<SingleItemRequest<Leaderboard>>()
                     .await.map_err(|err| RoleManagerError::new(format!("Failed to parse leaderboard provided by speedrun.com: {}", err)))?
-                    .data;
+                    .data);
 
                 cached_boards.insert(def, CachedBoard {
-                    leaderboard: leaderboard.clone(),
+                    leaderboard: Arc::clone(&leaderboard),
                     fetched_at: Utc::now().naive_utc()
                 });
 
                 // Cache any embedded information
                 if let GameOrId::Game { data } = &leaderboard.game {
                     cached_games.insert(data.id.clone(), CachedGame {
-                        game: data.clone(),
+                        game: Arc::new(data.clone()),
                         fetched_at: Utc::now().naive_utc()
                     });
                 }
                 if let CategoryOrId::Category { data } = &leaderboard.category {
                     cached_categories.insert(data.id.clone(), CachedCategory {
-                        category: data.clone(),
+                        category: Arc::new(data.clone()),
                         fetched_at: Utc::now().naive_utc()
                     });
                 }
@@ -241,7 +241,7 @@ impl SrComBoardsState {
                     for user in data {
                         if let UserOrGuest::User(user) = user {
                             cached_users.insert(user.id.clone(), CachedUser {
-                                user: user.clone(),
+                                user: Arc::new(user.clone()),
                                 fetched_at: Utc::now().naive_utc()
                             });
                         }
@@ -250,7 +250,7 @@ impl SrComBoardsState {
                 if let Some(MultipleItemRequest { data }) = &leaderboard.variables {
                     for var in data {
                         cached_variables.insert(var.id.clone(), CachedVariable {
-                            variable: var.clone(),
+                            variable: Arc::new(var.clone()),
                             fetched_at: Utc::now().naive_utc()
                         });
                     }
@@ -261,14 +261,14 @@ impl SrComBoardsState {
         }
     }
 
-    pub async fn fetch_game(&self, id: GameId) -> Result<Game, RoleManagerError> {
+    pub async fn fetch_game(&self, id: GameId) -> Result<Arc<Game>, RoleManagerError> {
         let mut cached_games = self.cached_games.lock().await;
 
         match cached_games.get(&id).filter(|c| {
             c.fetched_at.checked_add_signed(self.cache_persist_time).map(|t| t > Utc::now().naive_utc()).unwrap_or(false)
         }) {
             Some(cached_game) => {
-                Ok(cached_game.game.clone())
+                Ok(Arc::clone(&cached_game.game))
             }
             None => {
                 let endpoint_url = Url::parse(
@@ -284,12 +284,12 @@ impl SrComBoardsState {
                     .call(Request::new(Method::GET, endpoint_url))
                     .await.map_err(|err| RoleManagerError::new(format!("Failed to send request to speedrun.com: {}", err)))?;
 
-                let game = response.json::<SingleItemRequest<Game>>()
+                let game = Arc::new(response.json::<SingleItemRequest<Game>>()
                     .await.map_err(|err| RoleManagerError::new(format!("Failed to parse game provided by speedrun.com: {}", err)))?
-                    .data;
+                    .data);
 
                 cached_games.insert(id.clone(), CachedGame {
-                    game: game.clone(),
+                    game: Arc::clone(&game),
                     fetched_at: Utc::now().naive_utc()
                 });
 
@@ -298,14 +298,14 @@ impl SrComBoardsState {
         }
     }
 
-    pub async fn fetch_category(&self, id: CategoryId) -> Result<Category, RoleManagerError> {
+    pub async fn fetch_category(&self, id: CategoryId) -> Result<Arc<Category>, RoleManagerError> {
         let mut cached_categories = self.cached_categories.lock().await;
 
         match cached_categories.get(&id).filter(|c| {
             c.fetched_at.checked_add_signed(self.cache_persist_time).map(|t| t > Utc::now().naive_utc()).unwrap_or(false)
         }) {
             Some(cached_category) => {
-                Ok(cached_category.category.clone())
+                Ok(Arc::clone(&cached_category.category))
             }
             None => {
                 let endpoint_url = Url::parse(
@@ -321,12 +321,12 @@ impl SrComBoardsState {
                     .call(Request::new(Method::GET, endpoint_url))
                     .await.map_err(|err| RoleManagerError::new(format!("Failed to send request to speedrun.com: {}", err)))?;
 
-                let category = response.json::<SingleItemRequest<Category>>()
+                let category = Arc::new(response.json::<SingleItemRequest<Category>>()
                     .await.map_err(|err| RoleManagerError::new(format!("Failed to parse category provided by speedrun.com: {}", err)))?
-                    .data;
+                    .data);
 
                 cached_categories.insert(id.clone(), CachedCategory {
-                    category: category.clone(),
+                    category: Arc::clone(&category),
                     fetched_at: Utc::now().naive_utc()
                 });
 
@@ -335,14 +335,14 @@ impl SrComBoardsState {
         }
     }
 
-    pub async fn fetch_user(&self, id: UserId) -> Result<User, RoleManagerError> {
+    pub async fn fetch_user(&self, id: UserId) -> Result<Arc<User>, RoleManagerError> {
         let mut cached_users = self.cached_users.lock().await;
 
         match cached_users.get(&id).filter(|c| {
             c.fetched_at.checked_add_signed(self.cache_persist_time).map(|t| t > Utc::now().naive_utc()).unwrap_or(false)
         }) {
             Some(cached_user) => {
-                Ok(cached_user.user.clone())
+                Ok(Arc::clone(&cached_user.user))
             }
             None => {
                 let endpoint_url = Url::parse(
@@ -358,12 +358,12 @@ impl SrComBoardsState {
                     .call(Request::new(Method::GET, endpoint_url))
                     .await.map_err(|err| RoleManagerError::new(format!("Failed to send request to speedrun.com: {}", err)))?;
 
-                let user = response.json::<SingleItemRequest<User>>()
+                let user = Arc::new(response.json::<SingleItemRequest<User>>()
                     .await.map_err(|err| RoleManagerError::new(format!("Failed to parse user provided by speedrun.com: {}", err)))?
-                    .data;
+                    .data);
 
                 cached_users.insert(id.clone(), CachedUser {
-                    user: user.clone(),
+                    user: Arc::clone(&user),
                     fetched_at: Utc::now().naive_utc()
                 });
 
@@ -372,14 +372,14 @@ impl SrComBoardsState {
         }
     }
 
-    pub async fn fetch_variable(&self, id: VariableId) -> Result<Variable, RoleManagerError> {
+    pub async fn fetch_variable(&self, id: VariableId) -> Result<Arc<Variable>, RoleManagerError> {
         let mut cached_variables = self.cached_variables.lock().await;
 
         match cached_variables.get(&id).filter(|c| {
             c.fetched_at.checked_add_signed(self.cache_persist_time).map(|t| t > Utc::now().naive_utc()).unwrap_or(false)
         }) {
             Some(cached_variable) => {
-                Ok(cached_variable.variable.clone())
+                Ok(Arc::clone(&cached_variable.variable))
             }
             None => {
                 let endpoint_url = Url::parse(
@@ -395,12 +395,12 @@ impl SrComBoardsState {
                     .call(Request::new(Method::GET, endpoint_url))
                     .await.map_err(|err| RoleManagerError::new(format!("Failed to send request to speedrun.com: {}", err)))?;
 
-                let variable = response.json::<SingleItemRequest<Variable>>()
+                let variable = Arc::new(response.json::<SingleItemRequest<Variable>>()
                     .await.map_err(|err| RoleManagerError::new(format!("Failed to parse variable provided by speedrun.com: {}", err)))?
-                    .data;
+                    .data);
 
                 cached_variables.insert(id.clone(), CachedVariable {
-                    variable: variable.clone(),
+                    variable: Arc::clone(&variable),
                     fetched_at: Utc::now().naive_utc()
                 });
 
@@ -420,31 +420,31 @@ struct BoardDefinition {
 
 #[derive(Debug)]
 struct CachedBoard {
-    leaderboard: Leaderboard,
+    leaderboard: Arc<Leaderboard>,
     fetched_at: NaiveDateTime
 }
 
 #[derive(Debug)]
 struct CachedGame {
-    game: Game,
+    game: Arc<Game>,
     fetched_at: NaiveDateTime
 }
 
 #[derive(Debug)]
 struct CachedCategory {
-    category: Category,
+    category: Arc<Category>,
     fetched_at: NaiveDateTime
 }
 
 #[derive(Debug)]
 struct CachedUser {
-    user: User,
+    user: Arc<User>,
     fetched_at: NaiveDateTime
 }
 
 #[derive(Debug)]
 struct CachedVariable {
-    variable: Variable,
+    variable: Arc<Variable>,
     fetched_at: NaiveDateTime
 }
 
