@@ -1,10 +1,5 @@
-use role_manager::boards as boards;
 use role_manager::bot as bot;
 use role_manager::config as config;
-use role_manager::error as error;
-use role_manager::analyzer as analyzer;
-use role_manager::model as model;
-use role_manager::multikey_hashmap as multikey_hashmap;
 
 use std::sync::Arc;
 use chrono::Duration;

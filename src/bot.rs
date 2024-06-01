@@ -1,18 +1,19 @@
 use std::sync::Arc;
-use std::borrow::Cow;
-use std::collections::HashMap;
+
+use poise::serenity_prelude as serenity;
 
 use sea_orm::DatabaseConnection;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
 use sea_orm::ColumnTrait;
+use serenity::all::CreateEmbed;
 use serenity::model::prelude::*;
 
 use crate::analyzer;
 use crate::boards::cm::CmBoardsState;
 use crate::boards::srcom::SrComBoardsState;
 use crate::error::RoleManagerError;
-use crate::analyzer::role_definition::{RequirementDefinition, RoleDefinition};
+use crate::analyzer::role_definition::RoleDefinition;
 use crate::analyzer::user::{analyze_user, ExternalAccount};
 use crate::config::Config;
 use crate::model::lumadb::verified_connections;
@@ -28,10 +29,13 @@ type PoiseContext<'a> = poise::Context<'a, BotState, RoleManagerError>;
 
 async fn on_error(error: poise::FrameworkError<'_, BotState, RoleManagerError>) {
     match error {
-        poise::FrameworkError::Command { error , ctx } => {
-            if let Err(err) = ctx.send(|response| {
-                response.embed(|embed| embed.title("Failed to execute command").description(format!("{}", error)))
-            }).await {
+        poise::FrameworkError::Command { error , ctx, .. } => {
+            if let Err(err) = ctx.send(
+                poise::CreateReply::default()
+                    .embed(serenity::CreateEmbed::new()
+                            .title("Failed to execute command")
+                            .description(format!("{}", error)))
+            ).await {
                 eprintln!("Sending error response failed: {}", err);
                 eprintln!("Caused by: {}", error);
             }
@@ -49,23 +53,24 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state
             on_error: |error| Box::pin(on_error(error)),
             ..Default::default()
         })
-        .token(config.discord_bot_token.as_str())
-        .intents(GatewayIntents::all())
-        .user_data_setup(move |ctx,_ready, framework| Box::pin(async move {
-            GuildId(299658323500990464).set_application_commands(ctx, |b| {
-                *b = poise::builtins::create_application_commands(&framework.options().commands);
-                b
-            }).await.unwrap();
+        .setup(move |ctx,_ready, framework| Box::pin(async move {
+            GuildId::new(299658323500990464).set_commands(ctx,
+                poise::builtins::create_application_commands(&framework.options().commands)
+            ).await.unwrap();
 
-            GuildId(713630719582404609).set_application_commands(ctx, |b| {
-                *b = poise::builtins::create_application_commands(&framework.options().commands);
-                b
-            }).await.unwrap();
+            GuildId::new(713630719582404609).set_commands(ctx,
+                poise::builtins::create_application_commands(&framework.options().commands)
+            ).await.unwrap();
 
             Ok(BotState { db, srcom_state, cm_state })
-        }));
+        }))
+        .build();
 
-    framework.run_autosharded().await.unwrap();
+    let client = serenity::ClientBuilder::new(config.discord_bot_token.as_str(), GatewayIntents::all())
+        .framework(framework)
+        .await;
+
+    client.unwrap().start().await.unwrap();
 }
 
 
@@ -76,7 +81,9 @@ async fn analyze(
     #[description = "Json5 file describing skill role definitions"]
     definition_file: Attachment
 ) -> Result<(), RoleManagerError> {
+    println!("Deferring response");
     ctx.defer().await?;
+    println!("Finished deferring response");
 
     // Download the definition file
     let response = reqwest::get(definition_file.url.clone())
@@ -97,9 +104,9 @@ async fn analyze(
     let mut offset: Option<u64> = None;
 
     loop {
-        let iteration = ctx.discord().http.get_guild_members(146404426746167296, Some(1_000), offset).await?;
+        let iteration = ctx.http().get_guild_members(GuildId::new(146404426746167296), Some(1_000), offset).await?;
         if !iteration.is_empty() {
-            offset = Some(iteration.get(iteration.len() - 1).unwrap().user.id.0);
+            offset = Some(iteration.get(iteration.len() - 1).unwrap().user.id.get());
         }
 
         let end = iteration.len() < 1000;
@@ -113,22 +120,17 @@ async fn analyze(
 
     let (fields, total_users, steam_users, srcom_users) = analyzer::full_analysis(definition, connections, users, ctx.data().srcom_state.clone(), ctx.data().cm_state.clone()).await?;
 
-    ctx.send(|response| {
-        response.embed(|embed| {
-            let mut builder = embed.title("Role Definition Summary")
-                .description(format!("Analyzed **{} Users** ({} CM, {} SRC)", total_users, steam_users, srcom_users))
-                .footer(|f| f.text(format!("Context: {}", definition_file.filename)));
+    let mut embed = CreateEmbed::new()
+        .description(format!("Analyzed **{} Users** ({} CM, {} SRC)", total_users, steam_users, srcom_users))
+        .footer(serenity::CreateEmbedFooter::new(format!("Context: {}", definition_file.filename)));
+    for field in fields {
+        embed = embed.field(field.0, field.1, false);
+    }
 
-            for field in fields {
-                builder = builder.field(field.0, field.1, false);
-            }
-
-            builder
-        }).attachment(AttachmentType::Bytes {
-            data: Cow::Owned(response_str.as_bytes().to_vec()),
-            filename: definition_file.filename
-        })
-    }).await?;
+    ctx.send(poise::CreateReply::default()
+        .embed(embed)
+        .attachment(serenity::CreateAttachment::bytes(response_str.as_bytes(), definition_file.filename))
+    ).await?;
 
     Ok(())
 }
@@ -157,11 +159,11 @@ pub async fn user(
 
     let user = user.as_ref().unwrap_or(ctx.author());
 
-    println!("Analyzing {}#{:04}", user.name, user.discriminator);
+    println!("Analyzing {}", user.name);
 
     // Request relevant (steam,srcom) accounts from database
     let connections: Vec<verified_connections::Model> = verified_connections::Entity::find()
-        .filter(verified_connections::Column::UserId.eq(user.id.0 as i64))
+        .filter(verified_connections::Column::UserId.eq(user.id.get() as i64))
         .filter(verified_connections::Column::Removed.eq(0))
         .all(ctx.data().db.as_ref())
         .await?;
@@ -179,7 +181,7 @@ pub async fn user(
     for badge in &analysis.badges {
         let mut requirement_descs = Vec::new();
         for met_requirement in &badge.met_requirements {
-            requirement_descs.push(format!("{}\n - {}", met_requirement.definition.format(ctx.data().srcom_state.clone(), ctx.data().cm_state.clone()).await?, met_requirement.cause));
+            requirement_descs.push(format!("{}\n - {}", met_requirement.definition.format(ctx.data().srcom_state.clone()).await?, met_requirement.cause));
         }
 
         fields.push((badge.definition.name.clone(), requirement_descs.join("\n")));
@@ -187,38 +189,30 @@ pub async fn user(
 
     println!("Completed analysis: {:#?}", &analysis);
 
-    ctx.send(|response| {
-        response.embed(|embed| {
-            let mut builder = embed.footer(|f| f.text(format!("Context: {}", definition_file.filename)))
-                .author(|author| {
-                    author.name(&user.name.clone())
-                        .icon_url(user.avatar_url().unwrap_or(user.default_avatar_url()))
-                });
-
-            let mut account_descs = Vec::new();
-            for external_account in analysis.external_accounts {
-                match external_account {
-                    ExternalAccount::Cm { id, username } => {
-                        account_descs.push(format!("- [{} (Steam)](https://board.portal2.sr/profile/{})", username, id));
-                    }
-                    ExternalAccount::Srcom { username, link, .. } => {
-                        account_descs.push(format!("- [{} (Speedrun.com)]({})", username, link));
-                    }
-                }
+    let mut account_descs = Vec::new();
+    for external_account in analysis.external_accounts {
+        match external_account {
+            ExternalAccount::Cm { id, username } => {
+                account_descs.push(format!("- [{} (Steam)](https://board.portal2.sr/profile/{})", username, id));
             }
-
-            builder = builder.description(format!("**__External Accounts__**\n{}\n**__Badges__**", account_descs.join("\n")));
-
-            for field in fields {
-                builder = builder.field(field.0, field.1, false);
+            ExternalAccount::Srcom { username, link, .. } => {
+                account_descs.push(format!("- [{} (Speedrun.com)]({})", username, link));
             }
+        }
+    }
 
-            builder
-        }).attachment(AttachmentType::Bytes {
-            data: Cow::Owned(response_str.as_bytes().to_vec()),
-            filename: definition_file.filename
-        })
-    }).await?;
+    let mut embed = serenity::CreateEmbed::new()
+        .footer(serenity::CreateEmbedFooter::new(format!("Context: {}", definition_file.filename)))
+        .author(serenity::CreateEmbedAuthor::new(&user.name).icon_url(user.avatar_url().unwrap_or(user.default_avatar_url())))
+        .description(format!("**__External Accounts__**\n{}\n**__Badges__**", account_descs.join("\n")));
+    for field in fields {
+        embed = embed.field(field.0, field.1, false);
+    }
+
+    ctx.send(poise::CreateReply::default()
+        .embed(embed)
+        .attachment(serenity::CreateAttachment::bytes(response_str.as_bytes(), definition_file.filename))
+    ).await?;
 
     Ok(())
 }

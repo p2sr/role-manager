@@ -5,16 +5,14 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "servers")]
 pub struct Model {
-    #[sea_orm(column_type = "Custom(\"TINYTEXT\".to_owned())", nullable)]
     pub prefix: Option<String>,
-    #[sea_orm(column_type = "Custom(\"TINYTEXT\".to_owned())", nullable)]
     pub locale: Option<String>,
     pub logging_channel: Option<i64>,
     pub streams_channel: Option<String>,
     pub notify: i32,
     pub monthly_clarifai_cap: i32,
     pub clarifai_count: i32,
-    pub clarifai_reset_date: Option<DateTimeUtc>,
+    pub clarifai_reset_date: Option<chrono::DateTime<chrono::Utc>>,
     #[sea_orm(primary_key, auto_increment = false, unique)]
     pub id: u64,
     pub pin_emoji_unicode: Option<String>,

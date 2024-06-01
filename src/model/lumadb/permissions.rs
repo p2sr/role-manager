@@ -10,7 +10,6 @@ pub struct Model {
     pub enabled: i8,
     pub server: Option<i64>,
     pub creator: Option<i64>,
-    #[sea_orm(column_type = "Custom(\"TINYTEXT\".to_owned())")]
     pub target: String,
     pub target_id: i64,
     pub permissions: i64,

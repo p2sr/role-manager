@@ -65,13 +65,13 @@ impl Display for MetRequirementCause {
                     None => write!(f, "Assigned {}", assigned_on)
                 }
             }
-            Self::FullgameRun { link, rank, time, achieved_on, .. } => {
+            Self::FullgameRun { link, rank, time, .. } => {
                 write!(f, "[#{} - {}]({})", rank, time, link)
             }
             Self::CmAggregate { steam_id, board, points } => {
                 write!(f, "[{} - {}](https://board.portal2.sr/profile/{})", board, points, steam_id)
             }
-            Self::CmRun { steam_id, chapter, chamber, rank, time, achieved_on } => {
+            Self::CmRun { steam_id: _, chapter, chamber, rank, time, achieved_on } => {
                 write!(f, "{}/{} - #{} - {} ({})", chapter, chamber, rank, time, achieved_on)
             }
             Self::CmActivity { steam_id } => {
@@ -144,7 +144,7 @@ pub async fn analyze_user<'a>(
     let mut steam_ids: Vec<i64> = Vec::new();
     let mut srcom_ids = Vec::new();
     for connection in connections {
-        if connection.user_id != discord_user.id.0 as i64 {
+        if connection.user_id != discord_user.id.get() as i64 {
             continue;
         }
 

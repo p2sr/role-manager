@@ -93,7 +93,7 @@ pub async fn full_analysis(definition: role_definition::RoleDefinition,
         for req in &badge.requirements {
             let req_summary = summary.requirement_counts.get(req).unwrap();
 
-            requirement_descs.push(format!("{} - **{}/{}**", req.format(srcom_state.clone(), cm_state.clone()).await?, req_summary, summary.count))
+            requirement_descs.push(format!("{} - **{}/{}**", req.format(srcom_state.clone()).await?, req_summary, summary.count))
         }
 
         fields.push((format!("{} - {}", badge.name, summary.count), requirement_descs.join("\n")))

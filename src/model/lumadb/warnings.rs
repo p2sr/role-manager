@@ -8,7 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub user_id: i64,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub warning_instant: DateTimeUtc,
+    pub warning_instant: chrono::DateTime<chrono::Utc>,
     pub reason: Option<String>,
     pub message_link: String
 }

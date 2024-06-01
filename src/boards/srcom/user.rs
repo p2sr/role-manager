@@ -64,18 +64,21 @@ pub enum UserRole {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
 pub struct UserLocation {
     country: UserLocationSpec,
     region: Option<UserLocationSpec>
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
 pub struct UserLocationSpec {
     code: String,
     names: Names
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
 pub struct UserConnection {
     uri: String
 }

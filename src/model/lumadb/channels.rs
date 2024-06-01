@@ -5,9 +5,7 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "channels")]
 pub struct Model {
-    #[sea_orm(column_type = "Custom(\"TINYTEXT\".to_owned())", nullable)]
     pub prefix: Option<String>,
-    #[sea_orm(column_type = "Custom(\"TINYTEXT\".to_owned())", nullable)]
     pub locale: Option<String>,
     pub notify: Option<i32>,
     #[sea_orm(primary_key, auto_increment = false)]

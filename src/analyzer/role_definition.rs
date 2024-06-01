@@ -1,6 +1,5 @@
 use std::fmt::{Display, Formatter};
 use serde::{Deserialize};
-use crate::boards::cm::CmBoardsState;
 use crate::boards::srcom::SrComBoardsState;
 use crate::boards::srcom::category::CategoryId;
 use crate::boards::srcom::game::GameId;
@@ -37,7 +36,7 @@ pub enum RequirementDefinition {
 }
 
 impl RequirementDefinition {
-    pub async fn format(&self, srcom_state: SrComBoardsState, cm_state: CmBoardsState) -> Result<String, RoleManagerError> {
+    pub async fn format(&self, srcom_state: SrComBoardsState) -> Result<String, RoleManagerError> {
         Ok(match self {
             Self::Manual => format!("Manual"),
             Self::Rank(RankRequirement::Srcom { game, category, variables, top, partner }) => {

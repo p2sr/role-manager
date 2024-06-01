@@ -7,7 +7,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, unique)]
     pub user_id: i64,
-    pub undunce_instant: DateTimeUtc
+    pub undunce_instant: chrono::DateTime<chrono::Utc>
 }
 
 #[derive(Copy, Clone, Debug, EnumIter)]

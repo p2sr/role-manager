@@ -5,14 +5,10 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "nodes")]
 pub struct Model {
-    #[sea_orm(column_type = "Custom(\"MEDIUMTEXT\".to_owned())")]
     pub token: String,
-    #[sea_orm(column_type = "Custom(\"MEDIUMTEXT\".to_owned())", nullable)]
     pub session: Option<String>,
     pub task: Option<i32>,
-    #[sea_orm(column_type = "Custom(\"MEDIUMTEXT\".to_owned())", nullable)]
     pub last_known_host: Option<String>,
-    #[sea_orm(column_type = "Custom(\"MEDIUMTEXT\".to_owned())", nullable)]
     pub last_known_name: Option<String>,
     pub maintainer: i64,
     #[sea_orm(primary_key, auto_increment = false)]

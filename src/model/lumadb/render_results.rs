@@ -7,13 +7,9 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: i32,
-    #[sea_orm(column_type = "Custom(\"MEDIUMTEXT\".to_owned())")]
     pub name: String,
-    #[sea_orm(column_type = "Custom(\"TINYTEXT\".to_owned())")]
     pub r#type: String,
-    #[sea_orm(column_type = "Custom(\"TINYTEXT\".to_owned())", nullable)]
     pub code: Option<String>,
-    #[sea_orm(column_type = "Custom(\"TINYTEXT\".to_owned())", nullable)]
     pub thumbnail: Option<String>,
     pub requester: i64,
     pub width: i32,
