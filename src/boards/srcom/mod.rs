@@ -61,8 +61,6 @@ pub struct SrComBoardsState {
     cached_categories: Arc<Mutex<HashMap<CategoryId, CachedCategory>>>,
     cached_users: Arc<Mutex<HashMap<UserId, CachedUser>>>,
     cached_variables: Arc<Mutex<HashMap<VariableId, CachedVariable>>>,
-
-    leaderboard_place_lookup_cache: Arc<Mutex<HashMap<BoardDefinition, HashMap<(UserId, Option<PartnerRestriction>), Option<LeaderboardPlace>>>>>
 }
 
 impl SrComBoardsState {
@@ -78,8 +76,7 @@ impl SrComBoardsState {
             cached_games: Arc::new(Mutex::new(HashMap::new())),
             cached_categories: Arc::new(Mutex::new(HashMap::new())),
             cached_users: Arc::new(Mutex::new(HashMap::new())),
-            cached_variables: Arc::new(Mutex::new(HashMap::new())),
-            leaderboard_place_lookup_cache: Arc::new(Mutex::new(HashMap::new()))
+            cached_variables: Arc::new(Mutex::new(HashMap::new()))
         }
     }
 
@@ -90,7 +87,7 @@ impl SrComBoardsState {
         game: GameId,
         category: CategoryId,
         variable_map: BTreeMap<VariableId, VariableValueId>
-    ) -> Result<Option<LeaderboardPlace>, RoleManagerError> {
+    ) -> Result<Option<Arc<LeaderboardPlace>>, RoleManagerError> {
         let board_definition = BoardDefinition {
             game,
             category,
@@ -98,19 +95,10 @@ impl SrComBoardsState {
             variables: variable_map
         };
 
-        let mut cache_map = self.leaderboard_place_lookup_cache.lock().await;
-        let boards_cache = match cache_map.get_mut(&board_definition) {
-            Some(cache) => cache,
-            None => {
-                cache_map.insert(board_definition.clone(), HashMap::new());
-                cache_map.get_mut(&board_definition).unwrap()
-            }
-        };
-
         let leaderboard = self.fetch_leaderboard_by_definition(board_definition)
             .await?;
 
-        Ok(leaderboard.get_highest_run(user_id, partner_restriction, boards_cache))
+        Ok(leaderboard.get_highest_run(user_id, partner_restriction))
     }
 
     pub async fn fetch_leaderboard(

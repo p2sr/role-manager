@@ -1,4 +1,7 @@
+use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use serde::Deserialize;
 use crate::analyzer::role_definition::PartnerRestriction;
 use crate::boards::srcom::category::{CategoryOrId};
@@ -10,8 +13,9 @@ use crate::boards::srcom::region::RegionId;
 use crate::boards::srcom::run::{Run, RunPlayer, RunStatus};
 use crate::boards::srcom::user::{User, UserId};
 use crate::boards::srcom::variable::{Variable, VariableId, VariableValueId};
+use crate::multikey_hashmap::MultiKeyHashMap;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct Leaderboard {
     pub weblink: String,
     pub game: GameOrId,
@@ -24,10 +28,13 @@ pub struct Leaderboard {
     pub video_only: bool,
     pub timing: TimingMethod,
     pub values: HashMap<VariableId, VariableValueId>,
-    pub runs: Vec<LeaderboardPlace>,
+    pub runs: Vec<Arc<LeaderboardPlace>>,
     pub links: Option<Vec<Link>>,
     pub players: Option<MultipleItemRequest<UserOrGuest>>,
-    pub variables: Option<MultipleItemRequest<Variable>>
+    pub variables: Option<MultipleItemRequest<Variable>>,
+
+    #[serde(default)]
+    pub user_highest_run_cache: Mutex<MultiKeyHashMap<UserId, Option<PartnerRestriction>, Option<Arc<LeaderboardPlace>>>>
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -37,13 +44,15 @@ pub struct LeaderboardPlace {
 }
 
 impl Leaderboard {
-    pub fn get_highest_run(&self, user_id: &UserId, partner_restriction: &Option<PartnerRestriction>, user_highest_run_cache: &mut HashMap<(UserId, Option<PartnerRestriction>), Option<LeaderboardPlace>>) -> Option<LeaderboardPlace> {
-        if let Some(highest_run) = user_highest_run_cache
-            .get(&(user_id.clone(), *partner_restriction)) {
-            return highest_run.clone();
+    pub fn get_highest_run(&self, user_id: &UserId, partner_restriction: &Option<PartnerRestriction>) -> Option<Arc<LeaderboardPlace>> {
+        if let Some(highest_run) = self.user_highest_run_cache
+            .lock().unwrap()
+            .get(user_id, partner_restriction) {
+
+            return highest_run.as_ref().map(|p| Arc::clone(p));
         }
 
-        let mut best_place: Option<LeaderboardPlace> = None;
+        let mut best_place: Option<&Arc<LeaderboardPlace>> = None;
 
         for run in &self.runs {
             let mut player_match = false;
@@ -56,7 +65,7 @@ impl Leaderboard {
                         // Check this user against the partner restriction
                         match partner_restriction {
                             Some(PartnerRestriction::RankGte) => {
-                                match self.get_highest_run(id, &None, user_highest_run_cache) {
+                                match self.get_highest_run(id, &None) {
                                     Some(partner_place) => {
                                         if partner_place.place < run.place {
                                             other_players_meet_restriction = false;
@@ -74,19 +83,20 @@ impl Leaderboard {
             if player_match
                 && matches!(run.run.status, RunStatus::Verified {..})
                 && other_players_meet_restriction {
-                if match &best_place {
+                if match best_place {
                     Some(best) => run.place < best.place,
                     None => true
                 } {
-                    best_place = Some(run.clone())
+                    best_place = Some(&run)
                 }
             }
         }
 
-        user_highest_run_cache
-            .insert((user_id.clone(), *partner_restriction), best_place.clone());
+        self.user_highest_run_cache
+            .lock().unwrap()
+            .insert(user_id.clone(), *partner_restriction, best_place.map(|p| Arc::clone(p)));
 
-        best_place
+        best_place.map(|p| Arc::clone(p))
     }
 }
 

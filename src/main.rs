@@ -4,6 +4,7 @@ mod config;
 mod error;
 mod analyzer;
 mod model;
+mod multikey_hashmap;
 
 use std::sync::Arc;
 use chrono::Duration;

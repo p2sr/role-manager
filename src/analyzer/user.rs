@@ -81,8 +81,8 @@ impl Display for MetRequirementCause {
     }
 }
 
-fn fullgame_cause(user: &UserId, place: LeaderboardPlace) -> Result<MetRequirementCause, RoleManagerError> {
-    let date = match place.run.date {
+fn fullgame_cause(user: &UserId, place: &LeaderboardPlace) -> Result<MetRequirementCause, RoleManagerError> {
+    let date = match &place.run.date {
         Some(d) => {
             speedate::Date::parse_str(d.as_str())
                 .map_err(|err| RoleManagerError::new(format!("Speedrun.com returned an invalid date format: {} (caused by {})", d, err)))?
@@ -107,7 +107,7 @@ fn fullgame_cause(user: &UserId, place: LeaderboardPlace) -> Result<MetRequireme
 
     Ok(MetRequirementCause::FullgameRun {
         srcom_id: user.clone(),
-        link: place.run.weblink,
+        link: (&place.run.weblink).clone(),
         rank: place.place as u32,
         time: duration,
         achieved_on: date
@@ -192,7 +192,7 @@ pub async fn analyze_user<'a>(
                                         if run.place <= *top {
                                             met_requirements.push(MetRequirement {
                                                 definition: requirement,
-                                                cause: fullgame_cause(srcom, run)?
+                                                cause: fullgame_cause(srcom, &run)?
                                             });
                                             break;
                                         }
@@ -232,7 +232,7 @@ pub async fn analyze_user<'a>(
                                         if run.run.times.primary_t <= seconds as f64 {
                                             met_requirements.push(MetRequirement {
                                                 definition: requirement,
-                                                cause: fullgame_cause(srcom, run)?
+                                                cause: fullgame_cause(srcom, &run)?
                                             });
                                             break;
                                         }
@@ -294,7 +294,7 @@ pub async fn analyze_user<'a>(
                                                     .timestamp() {
                                                     met_requirements.push(MetRequirement {
                                                         definition: requirement,
-                                                        cause: fullgame_cause(srcom, run)?
+                                                        cause: fullgame_cause(srcom, &run)?
                                                     });
                                                     break
                                                 }
