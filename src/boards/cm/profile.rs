@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 use crate::error::RoleManagerError;
@@ -19,7 +20,7 @@ pub struct ProfileResponse {
 
 #[derive(Debug)]
 pub struct CachedProfile {
-    pub profile: Profile,
+    pub profile: Arc<Profile>,
     pub fetched_at: NaiveDateTime
 }
 

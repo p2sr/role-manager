@@ -211,6 +211,8 @@ async fn analyze(
         })
     }).await?;
 
+    std::process::exit(0);
+
     Ok(())
 }
 

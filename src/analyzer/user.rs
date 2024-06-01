@@ -245,7 +245,8 @@ pub async fn analyze_user<'a>(
                 }
                 RequirementDefinition::Points { leaderboard, points } => {
                     for steam_id in &steam_ids {
-                        let points_map = cm_boards.fetch_aggregate(leaderboard).await?.points;
+                        let aggregate = cm_boards.fetch_aggregate(leaderboard).await?;
+                        let points_map = &aggregate.points;
 
                         match points_map.get(&(steam_id.to_string())) {
                             Some(place) => {
@@ -340,7 +341,7 @@ pub async fn analyze_user<'a>(
 
     for steam_id in &steam_ids {
         let username = if requires_external_details {
-            cm_boards.fetch_profile(*steam_id).await?.board_name.unwrap_or(steam_id.to_string())
+            cm_boards.fetch_profile(*steam_id).await?.board_name.clone().unwrap_or(steam_id.to_string())
         } else {
             steam_id.to_string()
         };

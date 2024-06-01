@@ -1,16 +1,22 @@
+use std::sync::Arc;
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 use crate::error::RoleManagerError;
 
 #[derive(Debug)]
 pub struct CachedActiveProfiles {
-    pub active_profiles: Vec<String>,
+    pub active_profiles: Arc<Vec<String>>,
     pub fetched_at: NaiveDateTime
 }
 
 #[derive(Deserialize, Debug)]
+struct ActiveProfile {
+    profile_number: String
+}
+
+#[derive(Deserialize, Debug)]
 struct ActiveProfilesResponse {
-    profiles: Vec<String>
+    profiles: Vec<ActiveProfile>
 }
 
 pub async fn fetch_active_profiles(months: u64) -> Result<Vec<String>, RoleManagerError> {
@@ -21,5 +27,6 @@ pub async fn fetch_active_profiles(months: u64) -> Result<Vec<String>, RoleManag
         .await.map_err(|err| format!("Failed to request active profiles on board.portal2.sr: {}", err))?
         .json::<ActiveProfilesResponse>()
         .await.map_err(|err| format!("Failed to convert response from active profiles on board.portal2.sr: {}", err))?
-        .profiles)
+        .profiles
+        .into_iter().map(|profile| profile.profile_number).collect())
 }

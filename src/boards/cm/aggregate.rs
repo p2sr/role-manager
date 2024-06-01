@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 use crate::boards::cm::profile::Profile;
@@ -29,7 +30,7 @@ pub struct AggregatedResponse {
 
 #[derive(Debug)]
 pub struct CachedAggregate {
-    pub aggregate: AggregatedResponse,
+    pub aggregate: Arc<AggregatedResponse>,
     pub fetched_at: NaiveDateTime
 }
 

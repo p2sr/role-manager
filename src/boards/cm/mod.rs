@@ -33,7 +33,7 @@ impl CmBoardsState {
         }
     }
 
-    pub async fn fetch_aggregate(&self, leaderboard: &CmLeaderboard) -> Result<AggregatedResponse, RoleManagerError> {
+    pub async fn fetch_aggregate(&self, leaderboard: &CmLeaderboard) -> Result<Arc<AggregatedResponse>, RoleManagerError> {
         let mut cache = self.cached_aggregates.lock().await;
         let mut cached_profiles = self.cached_profiles.lock().await;
 
@@ -41,7 +41,7 @@ impl CmBoardsState {
             c.fetched_at.checked_add_signed(self.cache_persist_time).map(|t| t > Utc::now().naive_utc()).unwrap_or(false)
         }) {
             Some(cached_aggregate) => {
-                Ok(cached_aggregate.aggregate.clone())
+                Ok(Arc::clone(&cached_aggregate.aggregate))
             }
             None => {
                 let page = match leaderboard {
@@ -50,41 +50,41 @@ impl CmBoardsState {
                     CmLeaderboard::Coop => "aggregated/coop"
                 };
 
-                let aggregate = aggregate::fetch_aggregate(page).await?;
-
-                cache.insert(*leaderboard, CachedAggregate {
-                    aggregate: aggregate.clone(),
-                    fetched_at: Utc::now().naive_utc()
-                });
+                let aggregate = Arc::new(aggregate::fetch_aggregate(page).await?);
 
                 for pair in &aggregate.points {
                     cached_profiles.insert(pair.0.parse()
                                                .map_err(|err| format!("CM Boards provided invalid steam id: {}", err))?,
                                            CachedProfile {
-                                               profile: pair.1.user_data.clone(),
+                                               profile: Arc::new(pair.1.user_data.clone()),
                                                fetched_at: Utc::now().naive_utc()
                                            });
                 }
+
+                cache.insert(*leaderboard, CachedAggregate {
+                    aggregate: Arc::clone(&aggregate),
+                    fetched_at: Utc::now().naive_utc()
+                });
 
                 Ok(aggregate)
             }
         }
     }
 
-    pub async fn fetch_active_profiles(&self, months: u64) -> Result<Vec<String>, RoleManagerError> {
+    pub async fn fetch_active_profiles(&self, months: u64) -> Result<Arc<Vec<String>>, RoleManagerError> {
         let mut cache = self.cached_active_profiles.lock().await;
 
         match cache.get(&months).filter(|c| {
             c.fetched_at.checked_add_signed(self.cache_persist_time).map(|t| t > Utc::now().naive_utc()).unwrap_or(false)
         }) {
             Some(cached_profiles) => {
-                Ok(cached_profiles.active_profiles.clone())
+                Ok(Arc::clone(&cached_profiles.active_profiles))
             }
             None => {
-                let profiles = active_profiles::fetch_active_profiles(months).await?;
+                let profiles = Arc::new(active_profiles::fetch_active_profiles(months).await?);
 
                 cache.insert(months, CachedActiveProfiles {
-                    active_profiles: profiles.clone(),
+                    active_profiles: Arc::clone(&profiles),
                     fetched_at: Utc::now().naive_utc()
                 });
 
@@ -93,20 +93,20 @@ impl CmBoardsState {
         }
     }
 
-    pub async fn fetch_profile(&self, id: i64) -> Result<Profile, RoleManagerError> {
+    pub async fn fetch_profile(&self, id: i64) -> Result<Arc<Profile>, RoleManagerError> {
         let mut cache = self.cached_profiles.lock().await;
 
         match cache.get(&id).filter(|c| {
             c.fetched_at.checked_add_signed(self.cache_persist_time).map(|t| t > Utc::now().naive_utc()).unwrap_or(false)
         }) {
             Some(cached_profile) => {
-                Ok(cached_profile.profile.clone())
+                Ok(Arc::clone(&cached_profile.profile))
             }
             None => {
-                let profile = profile::fetch_profile(id).await?;
+                let profile = Arc::new(profile::fetch_profile(id).await?);
 
                 cache.insert(id, CachedProfile {
-                    profile: profile.clone(),
+                    profile: Arc::clone(&profile),
                     fetched_at: Utc::now().naive_utc()
                 });
 
