@@ -46,7 +46,7 @@ async fn on_error(error: poise::FrameworkError<'_, BotState, RoleManagerError>) 
     }
 }
 
-pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state: SrComBoardsState, cm_state: CmBoardsState) {
+pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state: SrComBoardsState, cm_state: CmBoardsState) -> Result<(), RoleManagerError> {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![analyze(), user()],
@@ -66,11 +66,24 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state
         }))
         .build();
 
-    let client = serenity::ClientBuilder::new(config.discord_bot_token.as_str(), GatewayIntents::all())
+    let mut client = serenity::ClientBuilder::new(config.discord_bot_token.as_str(), GatewayIntents::all())
         .framework(framework)
-        .await;
+        .await?;
 
-    client.unwrap().start().await.unwrap();
+    client.start().await?;
+
+    // Start a loop updating badges in P2SR every 5 minutes
+    /*tokio::spawn(async || {
+        loop {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+
+                }
+            }
+        }
+    });*/
+
+    Ok(())
 }
 
 
@@ -118,12 +131,12 @@ async fn analyze(
         }
     }
 
-    let (fields, total_users, steam_users, srcom_users) = analyzer::full_analysis(definition, connections, users, ctx.data().srcom_state.clone(), ctx.data().cm_state.clone()).await?;
+    let report = analyzer::full_analysis(definition, connections, users, ctx.data().srcom_state.clone(), ctx.data().cm_state.clone()).await?;
 
     let mut embed = CreateEmbed::new()
-        .description(format!("Analyzed **{} Users** ({} CM, {} SRC)", total_users, steam_users, srcom_users))
+        .description(format!("Analyzed **{} Users** ({} CM, {} SRC)", report.total_users, report.steam_users, report.srcom_users))
         .footer(serenity::CreateEmbedFooter::new(format!("Context: {}", definition_file.filename)));
-    for field in fields {
+    for field in report.badge_summary(ctx.data().srcom_state.clone()).await? {
         embed = embed.field(field.0, field.1, false);
     }
 

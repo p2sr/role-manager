@@ -8,6 +8,7 @@ mod tests {
     use test::Bencher;
     use chrono::Duration;
     use sea_orm::{Database, DatabaseConnection, EntityTrait, ColumnTrait, QueryFilter};
+    use serenity::all::GuildId;
     use serenity::model::guild::Member;
     use role_manager::config::load_config;
     use role_manager::boards::cm::CmBoardsState;
@@ -24,7 +25,7 @@ mod tests {
 
         // Definition file to use
         println!("Reading definition file");
-        let definition: RoleDefinition = json5::from_str(include_str!("../new-propsals-23-02-25.json5")).unwrap();
+        let definition: RoleDefinition = json5::from_str(include_str!("../official-roles-24-06-01.json5")).unwrap();
 
         // Setup state for fetching info
         println!("Setting up state for run");
@@ -49,9 +50,9 @@ mod tests {
         let mut offset: Option<u64> = None;
 
         loop {
-            let iteration = runtime.block_on(discord_http.get_guild_members(146404426746167296, Some(1_000), offset)).unwrap();
+            let iteration = runtime.block_on(discord_http.get_guild_members(GuildId::new(146404426746167296), Some(1_000), offset)).unwrap();
             if !iteration.is_empty() {
-                offset = Some(iteration.get(iteration.len() - 1).unwrap().user.id.0);
+                offset = Some(iteration.get(iteration.len() - 1).unwrap().user.id.get());
             }
 
             let end = iteration.len() < 1000;
