@@ -82,8 +82,8 @@ impl SrComBoardsState {
 
     pub async fn fetch_user_highest_run(
         &self,
-        user_id: &UserId,
-        partner_restriction: &Option<PartnerRestriction>,
+        user_id: UserId,
+        partner_restriction: Option<PartnerRestriction>,
         game: GameId,
         category: CategoryId,
         variable_map: BTreeMap<VariableId, VariableValueId>
@@ -334,9 +334,7 @@ impl SrComBoardsState {
             }
             None => {
                 let endpoint_url = Url::parse(
-                    format!("https://www.speedrun.com/api/v1/users/{}",
-                        urlencoding::encode(id.0.as_str())
-                    ).as_str()
+                    format!("https://www.speedrun.com/api/v1/users/{}", id).as_str()
                 ).map_err(|err| RoleManagerError::new(format!("Failed to build API request to speedrun.com: {}", err)))?;
 
                 let mut client = self.rate_limited_client.lock().await;

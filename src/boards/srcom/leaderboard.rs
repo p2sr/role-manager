@@ -11,7 +11,6 @@ use crate::boards::srcom::region::RegionId;
 use crate::boards::srcom::run::{Run, RunPlayer, RunStatus};
 use crate::boards::srcom::user::{User, UserId};
 use crate::boards::srcom::variable::{Variable, VariableId, VariableValueId};
-use crate::multikey_hashmap::MultiKeyHashMap;
 
 #[derive(Deserialize, Debug)]
 pub struct Leaderboard {
@@ -32,7 +31,7 @@ pub struct Leaderboard {
     pub variables: Option<MultipleItemRequest<Variable>>,
 
     #[serde(default)]
-    pub user_highest_run_cache: Mutex<MultiKeyHashMap<UserId, Option<PartnerRestriction>, Option<Arc<LeaderboardPlace>>>>
+    pub user_highest_run_cache: Mutex<HashMap<(UserId, Option<PartnerRestriction>), Option<Arc<LeaderboardPlace>>>>
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -42,10 +41,10 @@ pub struct LeaderboardPlace {
 }
 
 impl Leaderboard {
-    pub fn get_highest_run(&self, user_id: &UserId, partner_restriction: &Option<PartnerRestriction>) -> Option<Arc<LeaderboardPlace>> {
+    pub fn get_highest_run(&self, user_id: UserId, partner_restriction: Option<PartnerRestriction>) -> Option<Arc<LeaderboardPlace>> {
         if let Some(highest_run) = self.user_highest_run_cache
             .lock().unwrap()
-            .get(user_id, partner_restriction) {
+            .get(&(user_id, partner_restriction)) {
 
             return highest_run.as_ref().map(|p| Arc::clone(p));
         }
@@ -57,13 +56,13 @@ impl Leaderboard {
             let mut other_players_meet_restriction = true;
             for p in &(run.run.players) {
                 if let RunPlayer::User { id, .. } = p {
-                    if id == user_id {
+                    if *id == user_id {
                         player_match = true;
                     } else {
                         // Check this user against the partner restriction
                         match partner_restriction {
                             Some(PartnerRestriction::RankGte) => {
-                                match self.get_highest_run(id, &None) {
+                                match self.get_highest_run(*id, None) {
                                     Some(partner_place) => {
                                         if partner_place.place < run.place {
                                             other_players_meet_restriction = false;
@@ -92,7 +91,7 @@ impl Leaderboard {
 
         self.user_highest_run_cache
             .lock().unwrap()
-            .insert(user_id.clone(), *partner_restriction, best_place.map(|p| Arc::clone(p)));
+            .insert((user_id, partner_restriction), best_place.map(|p| Arc::clone(p)));
 
         best_place.map(|p| Arc::clone(p))
     }

@@ -150,10 +150,10 @@ pub async fn analyze_user<'a>(
 
         match connection.connection_type.as_str() {
             "steam" => {
-                steam_ids.push(connection.id.clone().parse().map_err(|err| RoleManagerError::new(format!("Database contains steam account with invalid ID: {}", err)))?)
+                steam_ids.push(connection.id.parse().map_err(|err| RoleManagerError::new(format!("Database contains steam account with invalid ID: {}", err)))?)
             }
             "srcom" => {
-                srcom_ids.push(UserId(connection.id.clone()));
+                srcom_ids.push(UserId::try_from(connection.id.as_str())?);
             }
             _ => {}
         }
@@ -182,8 +182,8 @@ pub async fn analyze_user<'a>(
 
                             for srcom in &srcom_ids {
                                 match srcom_boards.fetch_user_highest_run(
-                                    srcom,
-                                    partner,
+                                    *srcom,
+                                    *partner,
                                     game.clone(),
                                     category.clone(),
                                     variable_map.clone()
@@ -222,8 +222,8 @@ pub async fn analyze_user<'a>(
 
                             for srcom in &srcom_ids {
                                 match srcom_boards.fetch_user_highest_run(
-                                    srcom,
-                                    partner,
+                                    *srcom,
+                                    *partner,
                                     game.clone(),
                                     category.clone(),
                                     variable_map.clone()
@@ -280,8 +280,8 @@ pub async fn analyze_user<'a>(
                             }
                             for srcom in &srcom_ids {
                                 match srcom_boards.fetch_user_highest_run(
-                                    srcom,
-                                    &None,
+                                    *srcom,
+                                    None,
                                     game.clone(),
                                     category.clone(),
                                     variable_map.clone()
@@ -356,11 +356,11 @@ pub async fn analyze_user<'a>(
             let user = srcom_boards.fetch_user(srcom_id.clone()).await?;
             ((&user.names.international).clone(), (&user.weblink).clone())
         } else {
-            (srcom_id.0.clone(), srcom_id.0.clone())
+            (format!("{}", srcom_id), format!("{}", srcom_id))
         };
 
         external_accounts.push(ExternalAccount::Srcom {
-            id: srcom_id.clone(),
+            id: *srcom_id,
             username,
             link,
         })
