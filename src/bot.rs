@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::fmt::Write;
 use poise::futures_util::StreamExt;
+use itertools::Itertools;
 
 use poise::{CreateReply, serenity_prelude as serenity};
 
@@ -11,7 +12,6 @@ use sea_orm::QueryFilter;
 use sea_orm::ColumnTrait;
 use serenity::all::{CreateEmbed, Http};
 use serenity::builder::CreateAllowedMentions;
-use serenity::Client;
 use serenity::model::prelude::*;
 
 use crate::analyzer;
@@ -85,13 +85,20 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state
     let mut client = serenity::ClientBuilder::new(config.discord_bot_token.as_str(), GatewayIntents::all())
         .framework(framework)
         .await?;
+    let http = Arc::clone(&client.http);
 
-    client.start().await?;
+    tokio::spawn(async move {
+        if let Err(e) = client.start().await {
+            eprintln!("Bot instance crashed: {}", e);
+        }
+        std::process::exit(-1);
+    });
 
     // Start a loop updating badges in P2SR every 5 minutes
-    /*tokio::spawn(async move {
+    tokio::spawn(async move {
         loop {
-            if let Err(e) = update_badge_roles( GuildId::new(146404426746167296), &db2, &client.http, &srcom_state2, &cm_state2).await {
+            let guild_id = GuildId::new(146404426746167296);
+            if let Err(e) = update_badge_roles(guild_id, &db2, &http, &srcom_state2, &cm_state2).await {
                 eprintln!("Encountered error while updating badge roles:\n{:?}", e);
             }
 
@@ -99,10 +106,10 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state
                 _ = tokio::signal::ctrl_c() => {
                     return;
                 },
-                _ = tokio::time::sleep(tokio::time::Duration::from_secs(5 * 60)) => {}
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(60)) => {}
             }
         }
-    });*/
+    }).await?;
 
     Ok(())
 }
@@ -155,9 +162,19 @@ async fn update_badge_roles(guild_id: GuildId, db: &DatabaseConnection, client: 
             for analyzed_badge in analysis.badges {
                 match valid_badges.get(&analyzed_badge.definition) {
                     Some(role_id) => {
-                        // TODO: Make sure the user has this role
-                        if !member.roles.contains(&RoleId::new(*role_id)) {
+                        let role_id = RoleId::new(*role_id);
+
+                        if !member.roles.contains(&role_id) {
+                            let short_reason = analyzed_badge.met_requirements.iter()
+                                .map(|r| r.definition.short_description())
+                                .join(", ");
+
                             println!("Trying to add role {} to user {}", analyzed_badge.definition.name, member.display_name());
+                            println!(" - {}", short_reason);
+
+                            if !&server_config.dry_run {
+                                client.add_member_role(guild_id, member.user.id, role_id, Some(&short_reason)).await?
+                            }
                         }
                     },
                     None => {}
@@ -169,18 +186,23 @@ async fn update_badge_roles(guild_id: GuildId, db: &DatabaseConnection, client: 
             for badge_definition in badges_to_analyze {
                 match valid_badges.get(badge_definition) {
                     Some(role_id) => {
-                        // TODO: Make sure the user doesn't have this role
-                        if member.roles.contains(&RoleId::new(*role_id)) {
+                        let role_id = RoleId::new(*role_id);
+
+                        if member.roles.contains(&role_id) {
                             // See if this role is manually assigned
                             let mut manually_assigned = false;
                             for assignment in &manual_assignments {
-                                if (*(&assignment.user_id) as u64) == member.user.id.get() && (*(&assignment.role_id) as u64) == *role_id {
+                                if (*(&assignment.user_id) as u64) == member.user.id.get() && (*(&assignment.role_id) as u64) == role_id.get() {
                                     manually_assigned = true;
                                     break;
                                 }
                             }
                             if !manually_assigned {
                                 println!("Trying to remove role {} from user {}", badge_definition.name, member.display_name());
+
+                                if !&server_config.dry_run {
+                                    client.remove_member_role(guild_id, member.user.id, role_id, None).await?
+                                }
                             }
                         }
                     },
@@ -194,7 +216,7 @@ async fn update_badge_roles(guild_id: GuildId, db: &DatabaseConnection, client: 
 }
 
 /// Manage skill roles in this server
-#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", subcommands("redefine", "roles", "refresh"))]
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", subcommands("redefine", "roles", "refresh", "dryrun"))]
 async fn server(_ctx: PoiseContext<'_>) -> Result<(), RoleManagerError> {
     Err(RoleManagerError::new("Impossible state reached, cannot run menu commands".to_string()))
 }
@@ -317,6 +339,7 @@ async fn redefine(
     Ok(())
 }
 
+/// Manually trigger a role assignments refresh
 #[poise::command(slash_command, required_permissions = "MANAGE_GUILD")]
 async fn refresh(
     ctx: PoiseContext<'_>
@@ -337,6 +360,36 @@ async fn refresh(
     };
 
     ctx.reply(response).await?;
+
+    Ok(())
+}
+
+/// Set whether the bot's refreshes should perform a "dry run" or actually change roles
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD")]
+async fn dryrun(
+    ctx: PoiseContext<'_>,
+    #[description = "Whether the server should perform \"Dry run\" refreshes instead of normal"]
+    enabled: bool
+) -> Result<(), RoleManagerError> {
+    println!("Deferring response");
+    ctx.defer().await?;
+    println!("Finished deferring response");
+
+    let response = if let Some(id) = ctx.guild_id() {
+        let mut config = ServerConfig::read(id.get()).await?
+            .unwrap_or_default();
+
+        config.dry_run = enabled;
+        config.write(id.get()).await?;
+
+        "Updated this server's `dryrun` attribute".to_string()
+    } else {
+        "Can only use command on servers!".to_string()
+    };
+
+    ctx.send(CreateReply::default()
+        .allowed_mentions(CreateAllowedMentions::default().empty_roles().empty_users())
+        .content(response)).await?;
 
     Ok(())
 }

@@ -97,3 +97,12 @@ impl From<serde_json::Error> for RoleManagerError {
         }
     }
 }
+
+impl From<tokio::task::JoinError> for RoleManagerError {
+    fn from(err: tokio::task::JoinError) -> Self {
+        Self {
+            cause: format!("tokio Error: {}", err),
+            report_via_edit: false
+        }
+    }
+}

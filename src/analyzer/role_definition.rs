@@ -47,6 +47,27 @@ pub enum RequirementDefinition {
 }
 
 impl RequirementDefinition {
+    pub fn short_description(&self) -> String {
+        match self {
+            Self::Manual => format!("Manual"),
+            Self::Rank(RankRequirement::Srcom { game, category, variables, top, partner}) => {
+                format!("SRC {} Top {}", game.0, top)
+            },
+            Self::Time(TimeRequirement::Srcom { game, category, variables, time, partner}) => {
+                format!("SRC {} Sub {}", game.0, time)
+            },
+            Self::Points { leaderboard, points } => {
+                format!("{} {}p", leaderboard, points)
+            },
+            Self::Recent(RecentRequirement::Srcom {game, category, variables, months}) => {
+                format!("SRC {} Recent", game.0)
+            },
+            Self::Recent(RecentRequirement::Cm {months}) => {
+                format!("CM Recent")
+            }
+        }
+    }
+
     pub async fn format(&self, srcom_state: SrComBoardsState) -> Result<String, RoleManagerError> {
         Ok(match self {
             Self::Manual => format!("Manual"),

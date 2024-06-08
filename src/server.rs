@@ -5,6 +5,7 @@ use crate::error::RoleManagerError;
 
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct ServerConfig {
+    pub dry_run: bool,
     pub badge_roles: HashMap<String, u64>
 }
 
