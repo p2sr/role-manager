@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use poise::futures_util::StreamExt;
 
 use poise::serenity_prelude as serenity;
 
@@ -14,6 +15,7 @@ use crate::boards::cm::CmBoardsState;
 use crate::boards::srcom::SrComBoardsState;
 use crate::error::RoleManagerError;
 use crate::analyzer::role_definition::RoleDefinition;
+use crate::analyzer::user;
 use crate::analyzer::user::{analyze_user, ExternalAccount};
 use crate::config::Config;
 use crate::model::lumadb::verified_connections;
@@ -73,15 +75,64 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state
     client.start().await?;
 
     // Start a loop updating badges in P2SR every 5 minutes
-    /*tokio::spawn(async || {
+    tokio::spawn(async || {
         loop {
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
+            println!("Updating badge roles...");
 
+            let guild_id = GuildId::new(146404426746167296);
+            let definition_path = format!("server_definitions/{}.json5", guild_id.get());
+
+            if tokio::fs::try_exists(&definition_path).await? {
+                let definition_content = tokio::fs::read_to_string(&definition_path).await?;
+                let definition = json5::from_str(&definition_content)?;
+
+                let connections: Vec<verified_connections::Model> = verified_connections::Entity::find()
+                    .filter(verified_connections::Column::Removed.eq(0))
+                    .all(&db).await?;
+
+                let mut members = guild_id.members_iter(&client.http).boxed();
+                while let Some(member) = members.next().await {
+                    let analysis = user::analyze_user(
+                        member?.user.id.get(),
+                        &definition,
+                        &connections,
+                        srcom_state.clone(),
+                        cm_state.clone(),
+                        false
+                    ).await?;
+
+                    // TODO: Apply analysis to current state of member roles
                 }
             }
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    return;
+                },
+                _ = tokio::time::sleep(tokio::time::Duration::from_mins(5)) => {}
+            }
         }
-    });*/
+    });
+
+    Ok(())
+}
+
+/// Redefine the skill role definition used for this server
+#[poise::command(slash_command, required_permissions = "MANAGE_SERVER")]
+async fn redefine(
+    ctx: PoiseContext<'_>,
+    #[description = "Json5 file describing skill role definitions"]
+    definition_file: Attachment
+) -> Result<(), RoleManagerError> {
+    println!("Deferring response");
+    ctx.defer().await?;
+    println!("Finished deferring response");
+
+    let def_contents = definition_file.download().await?;
+
+    tokio::fs::create_dir_all("server_definitions").await?;
+    tokio::fs::write(format!("server_definitions/{}.json5", ctx.guild()?.id.get()), def_contents).awiat?;
+
+    ctx.reply("Updated definitions file for this server!").await?;
 
     Ok(())
 }
@@ -182,7 +233,7 @@ pub async fn user(
         .await?;
 
     let analysis = analyze_user(
-        user,
+        user.id.get(),
         &definition,
         &connections,
         ctx.data().srcom_state.clone(),

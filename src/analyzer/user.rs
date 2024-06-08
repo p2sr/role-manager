@@ -134,7 +134,7 @@ pub struct AnalyzedUser<'a> {
 }
 
 pub async fn analyze_user<'a>(
-    discord_user: &User,
+    discord_id: u64,
     role_definition: &'a RoleDefinition,
     connections: &Vec<verified_connections::Model>,
     srcom_boards: SrComBoardsState,
@@ -144,7 +144,7 @@ pub async fn analyze_user<'a>(
     let mut steam_ids: Vec<i64> = Vec::new();
     let mut srcom_ids = Vec::new();
     for connection in connections {
-        if connection.user_id != discord_user.id.get() as i64 {
+        if connection.user_id != discord_id {
             continue;
         }
 

@@ -84,7 +84,7 @@ pub async fn full_analysis(definition: RoleDefinition,
 
         // Analyze the user
         let analysis = user::analyze_user(
-            &user.user,
+            user.user.id.get(),
             &report.definition,
             &connections,
             srcom_state.clone(),
