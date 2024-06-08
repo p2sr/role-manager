@@ -8,12 +8,13 @@ debug = true
 
 [dependencies]
 
-tokio = { version = "1", features = [ "rt-multi-thread" ] }
+tokio = { version = "1", features = [ "rt-multi-thread", "signal" ] }
 
 chrono = "0.4"
 speedate = "0.14"
 
 serde = { version = "1", features = ["derive", "rc"] }
+serde_json = { version = "1" }
 json5 = "0.4"
 toml = "0.8"
 

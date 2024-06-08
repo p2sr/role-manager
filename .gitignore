@@ -16,3 +16,6 @@ Cargo.lock
 # Configuration Files
 config.toml
 .env
+
+/server_configs/
+/server_definitions/

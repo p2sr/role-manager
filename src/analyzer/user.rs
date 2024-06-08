@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use chrono::{Duration, NaiveDateTime, Utc};
-use serenity::model::user::User;
 use crate::analyzer::role_definition::{BadgeDefinition, CmLeaderboard, RankRequirement, RecentRequirement, RequirementDefinition, RoleDefinition, TimeRequirement};
 use crate::analyzer::user::MetRequirementCause::CmActivity;
 use crate::boards::srcom::leaderboard::LeaderboardPlace;
@@ -128,7 +127,7 @@ pub struct AnalyzedUserBadge<'a> {
 
 #[derive(Debug)]
 pub struct AnalyzedUser<'a> {
-    pub discord_user: User,
+    pub discord_id: u64,
     pub external_accounts: Vec<ExternalAccount>,
     pub badges: Vec<AnalyzedUserBadge<'a>>
 }
@@ -144,7 +143,7 @@ pub async fn analyze_user<'a>(
     let mut steam_ids: Vec<i64> = Vec::new();
     let mut srcom_ids = Vec::new();
     for connection in connections {
-        if connection.user_id != discord_id {
+        if connection.user_id != (discord_id as i64) {
             continue;
         }
 
@@ -368,7 +367,7 @@ pub async fn analyze_user<'a>(
 
 
     Ok(AnalyzedUser {
-        discord_user: discord_user.clone(),
+        discord_id,
         external_accounts,
         badges: analyzed_badges
     })

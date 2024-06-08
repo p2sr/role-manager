@@ -79,7 +79,8 @@ impl Leaderboard {
 
             if player_match
                 && matches!(run.run.status, RunStatus::Verified {..})
-                && other_players_meet_restriction {
+                && other_players_meet_restriction
+                && run.place != 0 {
                 if match best_place {
                     Some(best) => run.place < best.place,
                     None => true

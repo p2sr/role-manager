@@ -17,6 +17,17 @@ pub struct BadgeDefinition {
     pub requirements: Vec<RequirementDefinition>
 }
 
+impl BadgeDefinition {
+    pub fn can_autoremove(&self) -> bool {
+        for req in &self.requirements {
+            if let RequirementDefinition::Manual = req {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
 #[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum RequirementDefinition {

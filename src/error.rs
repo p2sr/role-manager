@@ -61,3 +61,39 @@ impl From<DbErr> for RoleManagerError {
         }
     }
 }
+
+impl From<std::io::Error> for RoleManagerError {
+    fn from(err: std::io::Error) -> Self {
+        Self {
+            cause: format!("IO error: {}", err),
+            report_via_edit: false
+        }
+    }
+}
+
+impl From<json5::Error> for RoleManagerError {
+    fn from(err: json5::Error) -> Self {
+        Self {
+            cause: format!("Json5 Parser Error: {}", err),
+            report_via_edit: false
+        }
+    }
+}
+
+impl From<std::fmt::Error> for RoleManagerError {
+    fn from(err: std::fmt::Error) -> Self {
+        Self {
+            cause: format!("Formatter Error: {}", err),
+            report_via_edit: false
+        }
+    }
+}
+
+impl From<serde_json::Error> for RoleManagerError {
+    fn from(err: serde_json::Error) -> Self {
+        Self {
+            cause: format!("Json Parser Error: {}", err),
+            report_via_edit: false
+        }
+    }
+}
