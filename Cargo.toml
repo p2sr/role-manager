@@ -18,6 +18,7 @@ serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1" }
 json5 = "0.4"
 toml = "0.8"
+csv = "1.2"
 
 sea-query = { version = "0.30" }
 sea-orm = { version = "0.12", default-features = false, features = [ "sqlx-mysql", "runtime-tokio-rustls", "debug-print", "macros", "with-chrono" ] }

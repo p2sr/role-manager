@@ -61,7 +61,7 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![server(), analyze(), user()],
+            commands: vec![server(), analyze(), user(), generate_report()],
             on_error: |error| Box::pin(on_error(error)),
             ..Default::default()
         })
@@ -451,6 +451,143 @@ async fn analyze(
     ctx.send(poise::CreateReply::default()
         .embed(embed)
         .attachment(serenity::CreateAttachment::bytes(response_str.as_bytes(), definition_file.filename))
+    ).await?;
+
+    Ok(())
+}
+
+/// Generates a CSV file reporting which users satisfy which requirements of a badge
+#[poise::command(slash_command)]
+async fn generate_report(
+    ctx: PoiseContext<'_>,
+    #[description = "Badge to analyze"]
+    badge_name: String,
+    #[description = "Json5 file describing skill role definitions"]
+    definition_file: Option<Attachment>,
+) -> Result<(), RoleManagerError> {
+    println!("Deferring response");
+    ctx.defer().await?;
+    println!("Finished deferring response");
+
+    let (response_str, definition_filename): (String, String) = match definition_file {
+        Some(definition_file) => {
+            // Download the definition file
+            let response = reqwest::get(definition_file.url.clone())
+                .await.map_err(|err| RoleManagerError::new_edit(format!("Failed to download provided role definition file: {}", err)))?
+                .text().await.map_err(|err| RoleManagerError::new_edit(format!("Failed to interpret provided role definition file download: {}", err)))?;
+            (response.as_str().to_string(), definition_file.filename)
+        }
+        None => {
+            if let Some(guild_id) = ctx.guild_id() {
+                // Use this server's definition file
+                let definition_path = format!("server_definitions/{}.json5", guild_id.get());
+
+                if tokio::fs::try_exists(&definition_path).await? {
+                    (tokio::fs::read_to_string(&definition_path).await?, format!("{}.json5", guild_id.get()))
+                } else {
+                    ctx.reply("This server doesn't have a definition file set for it! Try attatching one.").await?;
+                    return Ok(())
+                }
+            } else {
+                ctx.reply("This command can only be run in servers.").await?;
+                return Ok(())
+            }
+        }
+    };
+
+    let definition: RoleDefinition = json5::from_str(&response_str)
+        .map_err(|err| RoleManagerError::new_edit(format!("Invalid role definition file: {}", err)))?;
+
+    // Request relevant (steam,srcom) accounts from database
+    let connections: Vec<verified_connections::Model> = verified_connections::Entity::find()
+        .filter(verified_connections::Column::Removed.eq(0))
+        .all(ctx.data().db.as_ref())
+        .await?;
+
+    let mut users: Vec<Member> = Vec::new();
+    let mut offset: Option<u64> = None;
+
+    loop {
+        let iteration = ctx.http().get_guild_members(GuildId::new(146404426746167296), Some(1_000), offset).await?;
+        if !iteration.is_empty() {
+            offset = Some(iteration.get(iteration.len() - 1).unwrap().user.id.get());
+        }
+
+        let end = iteration.len() < 1000;
+
+        users.extend(iteration);
+
+        if end {
+            break;
+        }
+    }
+
+    // Look up the badge definition and build a header for our sheet with it
+    let badge_definition = match definition.badges.iter().find(|badge| badge.name == badge_name) {
+        Some(bd) => bd,
+        None => {
+            ctx.reply(format!("This definition file does not contain a badge `{}`", badge_name)).await?;
+            return Ok(())
+        }
+    };
+    let mut header = vec!["Discord User".to_string(), "Num Reqs Satisfied".to_string()];
+    for req in badge_definition.requirements.iter() {
+        header.push(req.format(ctx.data().srcom_state.clone()).await?);
+    }
+
+    // Write a CSV report
+    let mut report = csv::Writer::from_writer(vec![]);
+    report.write_record(&header).map_err(|e| RoleManagerError::new(format!("Failed to write to report: {}", e)))?;
+
+    let mut users_meeting_requirement = 0;
+
+    for user in &users {
+        let analysis = user::analyze_user(
+            user.user.id.get(),
+            &definition,
+            &connections,
+            ctx.data().srcom_state.clone(),
+            ctx.data().cm_state.clone(),
+            false
+        ).await?;
+        let badge_analysis = match analysis.badges.iter().find(|analyzed_badge| analyzed_badge.definition == badge_definition) {
+            Some(badge_analysis) => badge_analysis,
+            None => continue
+        };
+
+        users_meeting_requirement += 1;
+
+        // Build report row
+        let mut row = vec![];
+        row.push(user.user.name.clone());
+
+        let mut met_requirements = 0;
+        for req in &badge_definition.requirements {
+            if badge_analysis.met_requirements.iter().any(|met_req| *met_req.definition == *req) {
+                row.push(format!("true"));
+                met_requirements += 1;
+            } else {
+                row.push(format!("false"));
+            }
+        }
+
+        row.insert(1, format!("{}", met_requirements));
+
+        report.write_record(&row).map_err(|e| RoleManagerError::new(format!("Failed to write to report: {}", e)))?;
+    }
+
+    // Send response
+    let embed = CreateEmbed::new()
+        .description(format!("{}/{} Discord users meet the requirement for badge {}", users_meeting_requirement, users.len(), badge_name))
+        .footer(serenity::CreateEmbedFooter::new(format!("Context: {}", definition_filename)));
+
+    let report_inner = report.into_inner()
+        .map_err(|e| RoleManagerError::new(format!("Failed to generate report: {}", e)))?;
+
+    ctx.send(poise::CreateReply::default()
+        .embed(embed)
+        .attachment(serenity::CreateAttachment::bytes(report_inner, format!("{}.csv", badge_name)))
+        .attachment(serenity::CreateAttachment::bytes(response_str.as_bytes(), definition_filename))
     ).await?;
 
     Ok(())
