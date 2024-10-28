@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use chrono::{Duration, NaiveDateTime, Utc};
-use crate::analyzer::role_definition::{BadgeDefinition, CmLeaderboard, RankRequirement, RecentRequirement, RequirementDefinition, RoleDefinition, TimeRequirement};
+use crate::analyzer::role_definition::{BadgeDefinition, CmLeaderboard, RankRequirement, RankTimeRequirement, RecentRequirement, RequirementDefinition, RoleDefinition, TimeRequirement};
 use crate::analyzer::user::MetRequirementCause::CmActivity;
 use crate::boards::srcom::leaderboard::LeaderboardPlace;
 use crate::boards::srcom::SrComBoardsState;
@@ -229,6 +229,46 @@ pub async fn analyze_user<'a>(
                                 ).await? {
                                     Some(run) => {
                                         if run.run.times.primary_t <= seconds as f64 {
+                                            met_requirements.push(MetRequirement {
+                                                definition: requirement,
+                                                cause: fullgame_cause(srcom, &run)?
+                                            });
+                                            break;
+                                        }
+                                    }
+                                    None => {}
+                                }
+                            }
+                        }
+                    }
+                }
+                RequirementDefinition::RankTime(req) => {
+                    match req {
+                        RankTimeRequirement::Srcom { game, category, variables, time, top, partner } => {
+                            let seconds = speedate::Duration::parse_str(time.as_str())
+                                .map_err(|err| RoleManagerError::new(format!("Invalid duration specified in badge {}, {} (caused by {:?})", badge_definition.name, time, err)))?
+                                .signed_total_seconds();
+
+                            let mut variable_map = BTreeMap::new();
+                            match variables {
+                                Some(v) => {
+                                    for var in v {
+                                        variable_map.insert(var.variable.clone(), var.choice.clone());
+                                    }
+                                }
+                                None => {}
+                            }
+
+                            for srcom in &srcom_ids {
+                                match srcom_boards.fetch_user_highest_run(
+                                    *srcom,
+                                    *partner,
+                                    game.clone(),
+                                    category.clone(),
+                                    variable_map.clone()
+                                ).await? {
+                                    Some(run) => {
+                                        if run.run.times.primary_t <= seconds as f64 && run.place <= *top {
                                             met_requirements.push(MetRequirement {
                                                 definition: requirement,
                                                 cause: fullgame_cause(srcom, &run)?

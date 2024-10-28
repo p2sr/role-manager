@@ -37,6 +37,8 @@ pub enum RequirementDefinition {
     Rank(RankRequirement),
     #[serde(rename = "time")]
     Time(TimeRequirement),
+    #[serde(rename = "ranktime")]
+    RankTime(RankTimeRequirement),
     #[serde(rename = "points")]
     Points {
         leaderboard: CmLeaderboard,
@@ -55,6 +57,9 @@ impl RequirementDefinition {
             },
             Self::Time(TimeRequirement::Srcom { game, category, variables, time, partner}) => {
                 format!("SRC {} Sub {}", game.0, time)
+            },
+            Self::RankTime(RankTimeRequirement::Srcom { game, category, variables, time, top, partner}) => {
+                format!("SRC {} Sub {} AND Top {}", game.0, time, top)
             },
             Self::Points { leaderboard, points } => {
                 format!("{} {}p", leaderboard, points)
@@ -121,6 +126,32 @@ impl RequirementDefinition {
                     format!("SRC - {} - {} - Sub {}{}", game.names.international, category.name, time, restriction)
                 } else {
                     format!("SRC - {} - {} ({}) - Sub {}{}", game.names.international, category.name, variable_descs.join(","), time, restriction)
+                }
+            },
+            Self::RankTime(RankTimeRequirement::Srcom {game, category, variables, time, top, partner}) => {
+                let game = srcom_state.fetch_game(game.clone()).await?;
+                let category = srcom_state.fetch_category(category.clone()).await?;
+
+                let mut variable_descs = vec![];
+                for id_pair in variables.as_ref().unwrap_or(&vec![]) {
+                    let variable = srcom_state.fetch_variable(id_pair.variable.clone()).await?;
+                    let value = match variable.values.values.get(&id_pair.choice) {
+                        Some(value) => value.clone(),
+                        None => return Err(RoleManagerError::new(format!("Variable value {} is not a choice for variable {}", id_pair.choice.0, id_pair.variable.0)))
+                    };
+
+                    variable_descs.push(format!("{}", value.label));
+                }
+
+                let restriction = match partner {
+                    Some(PartnerRestriction::RankGte) => " (partner.rank>=player.rank)",
+                    None => ""
+                };
+
+                if variable_descs.is_empty() {
+                    format!("SRC - {} - {} - Sub {} AND Top {}{}", game.names.international, category.name, time, top, restriction)
+                } else {
+                    format!("SRC - {} - {} ({}) - Sub {} AND Top{}{}", game.names.international, category.name, variable_descs.join(","), time, top, restriction)
                 }
             },
             Self::Points { leaderboard, points } => {
@@ -227,6 +258,21 @@ pub enum TimeRequirement {
         variables: Option<Vec<VariableDefinition>>,
         partner: Option<PartnerRestriction>,
         time: String
+    }
+}
+
+
+#[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[serde(tag = "platform")]
+pub enum RankTimeRequirement {
+    #[serde(rename = "srcom")]
+    Srcom {
+        game: GameId,
+        category: CategoryId,
+        variables: Option<Vec<VariableDefinition>>,
+        partner: Option<PartnerRestriction>,
+        time: String,
+        top: u64
     }
 }
 
