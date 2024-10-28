@@ -358,7 +358,7 @@
                     "partner": "rank>=" // To qualify for this requirement, the partner rank must be >= the target user's rank
                 },
                 {
-                    "type": "time",
+                    "type": "rank",
                     "platform": "srcom",
                     "game": "om1mw4d2", // Portal 2
                     "category": "l9kv40kg", // Cooperative Game
