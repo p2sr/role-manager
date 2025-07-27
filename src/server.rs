@@ -6,7 +6,9 @@ use crate::error::RoleManagerError;
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct ServerConfig {
     pub dry_run: bool,
-    pub badge_roles: HashMap<String, u64>
+    pub badge_roles: HashMap<String, u64>,
+    #[serde(default)]
+    pub completed_badge_roles: HashMap<String, u64>
 }
 
 impl ServerConfig {
@@ -35,6 +37,16 @@ impl ServerConfig {
         HashMap::from_iter(definition.badges.iter()
             .filter_map(move |badge_definition| {
                 match self.badge_roles.get(&badge_definition.name) {
+                    Some(role_id) => Some((badge_definition, *role_id)),
+                    None => None
+                }
+            }))
+    }
+
+    pub fn valid_completed_badges<'a>(&self, definition: &'a RoleDefinition) -> HashMap<&'a BadgeDefinition, u64> {
+        HashMap::from_iter(definition.badges.iter()
+            .filter_map(move |badge_definition| {
+                match self.completed_badge_roles.get(&badge_definition.name) {
                     Some(role_id) => Some((badge_definition, *role_id)),
                     None => None
                 }

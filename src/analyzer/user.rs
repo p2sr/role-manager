@@ -125,6 +125,12 @@ pub struct AnalyzedUserBadge<'a> {
     pub met_requirements: Vec<MetRequirement<'a>>
 }
 
+impl AnalyzedUserBadge<'_> {
+    pub fn is_complete(&self) -> bool {
+        return self.met_requirements.len() == self.definition.requirements.len();
+    }
+}
+
 #[derive(Debug)]
 pub struct AnalyzedUser<'a> {
     pub discord_id: u64,

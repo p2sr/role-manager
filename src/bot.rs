@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::fmt::Write;
-use poise::futures_util::StreamExt;
+use poise::futures_util::{Stream, StreamExt};
 use itertools::Itertools;
 
 use poise::{CreateReply, serenity_prelude as serenity};
@@ -130,10 +130,13 @@ async fn update_badge_roles(guild_id: GuildId, db: &DatabaseConnection, client: 
         let definition_content = tokio::fs::read_to_string(&definition_path).await?;
         let definition = json5::from_str(&definition_content)?;
         let valid_badges = server_config.valid_badges(&definition);
+        let valid_completed_badges = server_config.valid_completed_badges(&definition);
 
         let badge_set: HashSet<&BadgeDefinition> = valid_badges.keys().into_iter()
             .map(|x| *x)
-            .filter(|x| x.can_autoremove())
+            .collect();
+        let completed_badge_set: HashSet<&BadgeDefinition> = valid_completed_badges.keys().into_iter()
+            .map(|x| *x)
             .collect();
 
         let connections: Vec<verified_connections::Model> = verified_connections::Entity::find()
@@ -156,12 +159,32 @@ async fn update_badge_roles(guild_id: GuildId, db: &DatabaseConnection, client: 
                 false
             ).await?;
 
-            let mut badges_to_analyze = badge_set.clone();
+            let mut badges_to_remove = badge_set.clone();
+            let mut complete_badges_to_remove = completed_badge_set.clone();
 
             // Make sure the user has roles that they are supposed to
             for analyzed_badge in analysis.badges {
-                match valid_badges.get(&analyzed_badge.definition) {
-                    Some(role_id) => {
+                if let Some(role_id) = valid_badges.get(&analyzed_badge.definition) {
+                    let role_id = RoleId::new(*role_id);
+
+                    if !member.roles.contains(&role_id) {
+                        let short_reason = analyzed_badge.met_requirements.iter()
+                            .map(|r| r.definition.short_description())
+                            .join(", ");
+
+                        println!("Trying to add role {} to user {}", analyzed_badge.definition.name, member.display_name());
+                        println!(" - {}", short_reason);
+
+                        if !&server_config.dry_run {
+                            client.add_member_role(guild_id, member.user.id, role_id, Some(&short_reason)).await?
+                        }
+                    }
+                }
+                badges_to_remove.remove(analyzed_badge.definition);
+
+                // Check if completed badge should also be awarded
+                if analyzed_badge.is_complete() {
+                    if let Some(role_id) = valid_completed_badges.get(&analyzed_badge.definition) {
                         let role_id = RoleId::new(*role_id);
 
                         if !member.roles.contains(&role_id) {
@@ -169,50 +192,99 @@ async fn update_badge_roles(guild_id: GuildId, db: &DatabaseConnection, client: 
                                 .map(|r| r.definition.short_description())
                                 .join(", ");
 
-                            println!("Trying to add role {} to user {}", analyzed_badge.definition.name, member.display_name());
+                            println!("Trying to add *completed* role {} to user {}", analyzed_badge.definition.name, member.display_name());
                             println!(" - {}", short_reason);
 
-                            if !&server_config.dry_run {
+                            if !server_config.dry_run {
                                 client.add_member_role(guild_id, member.user.id, role_id, Some(&short_reason)).await?
                             }
                         }
-                    },
-                    None => {}
+                    }
+
+                    complete_badges_to_remove.remove(analyzed_badge.definition);
                 }
-                badges_to_analyze.remove(analyzed_badge.definition);
             }
 
             // Make sure the user doesn't have roles they're not supposed to
-            for badge_definition in badges_to_analyze {
-                match valid_badges.get(badge_definition) {
-                    Some(role_id) => {
-                        let role_id = RoleId::new(*role_id);
+            for badge_definition in badges_to_remove {
+                if !badge_definition.can_autoremove() {
+                    continue;
+                }
 
-                        if member.roles.contains(&role_id) {
-                            // See if this role is manually assigned
-                            let mut manually_assigned = false;
-                            for assignment in &manual_assignments {
-                                if (*(&assignment.user_id) as u64) == member.user.id.get() && (*(&assignment.role_id) as u64) == role_id.get() {
-                                    manually_assigned = true;
-                                    break;
-                                }
-                            }
-                            if !manually_assigned {
-                                println!("Trying to remove role {} from user {}", badge_definition.name, member.display_name());
+                if let Some(role_id) = valid_badges.get(badge_definition) {
+                    let role_id = RoleId::new(*role_id);
 
-                                if !&server_config.dry_run {
-                                    client.remove_member_role(guild_id, member.user.id, role_id, None).await?
-                                }
+                    if member.roles.contains(&role_id) {
+                        // See if this role is manually assigned
+                        let mut manually_assigned = false;
+                        for assignment in &manual_assignments {
+                            if (*(&assignment.user_id) as u64) == member.user.id.get() && (*(&assignment.role_id) as u64) == role_id.get() {
+                                manually_assigned = true;
+                                break;
                             }
                         }
-                    },
-                    None => {}
+                        if !manually_assigned {
+                            println!("Trying to remove role {} from user {}", badge_definition.name, member.display_name());
+
+                            if !&server_config.dry_run {
+                                client.remove_member_role(guild_id, member.user.id, role_id, None).await?
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Make sure the user doesn't have completed roles they're not supposed to
+            for badge_definition in complete_badges_to_remove {
+                if !badge_definition.can_autoremove() {
+                    continue;
+                }
+
+                if let Some(role_id) = valid_completed_badges.get(badge_definition) {
+                    let role_id = RoleId::new(*role_id);
+
+                    if member.roles.contains(&role_id) {
+                        // See if this role is manually assigned
+                        let mut manually_assigned = false;
+                        for assignment in &manual_assignments {
+                            if (*(&assignment.user_id) as u64) == member.user.id.get() && (*(&assignment.role_id) as u64) == role_id.get() {
+                                manually_assigned = true;
+                                break;
+                            }
+                        }
+                        if !manually_assigned {
+                            println!("Trying to remove *completed* role {} from user {}", badge_definition.name, member.display_name());
+
+                            if !&server_config.dry_run {
+                                client.remove_member_role(guild_id, member.user.id, role_id, None).await?
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
     Ok(())
+}
+
+async fn autocomplete_badge<'a>(ctx: PoiseContext<'_>, partial: &'a str) -> impl Stream<Item = String> + 'a {
+    let mut badges = vec![];
+
+    if let Some(id) = ctx.guild_id() {
+        let definition_path = format!("server_definitions/{}.json5", id.get());
+
+        if tokio::fs::try_exists(&definition_path).await.unwrap_or(false)
+            && let Ok(definition_content) = tokio::fs::read_to_string(&definition_path).await
+            && let Ok(definition) = json5::from_str::<RoleDefinition>(&definition_content) {
+
+            badges = definition.badges;
+        }
+    }
+
+    poise::futures_util::stream::iter(badges)
+                .filter(move |badge| poise::futures_util::future::ready(badge.name.starts_with(partial)))
+                .map(|badge| badge.name)
 }
 
 /// Manage skill roles in this server
@@ -237,8 +309,13 @@ async fn list(ctx: PoiseContext<'_>) -> Result<(), RoleManagerError> {
             for (badge, role_id) in config.badge_roles {
                 write!(&mut response, "- **{}** - <@&{}>\n", badge, role_id)?;
             }
-        }
 
+            write!(&mut response, "\nCurrent *Complete* Badge Roles:\n")?;
+
+            for (badge, role_id) in config.completed_badge_roles {
+                write!(&mut response, "- **{}** - <@&{}>\n", badge, role_id)?;
+            }
+        }
         response
     } else {
         "Can only use command on servers!".to_string()
@@ -252,10 +329,17 @@ async fn list(ctx: PoiseContext<'_>) -> Result<(), RoleManagerError> {
 }
 
 /// Add a badge and a corresponding role to give on this server
-#[poise::command(slash_command, required_permissions = "MANAGE_GUILD")]
-async fn add(
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", subcommands("add_base", "add_complete"))]
+async fn add(_ctx: PoiseContext<'_>) -> Result<(), RoleManagerError> {
+    Err(RoleManagerError::new("Impossible state reached, cannot run menu commands".to_string()))
+}
+
+/// The base role for a badge
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", rename = "base")]
+async fn add_base(
     ctx: PoiseContext<'_>,
     #[description = "The badge name (as used in Json5 definition files)"]
+    #[autocomplete = "autocomplete_badge"]
     badge_name: String,
     #[description = "The role assigned to this badge"]
     role: Role
@@ -279,11 +363,47 @@ async fn add(
     Ok(())
 }
 
+/// The complete role for a badge (meets *all* requirements)
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", rename = "complete")]
+async fn add_complete(
+    ctx: PoiseContext<'_>,
+    #[description = "The badge name (as used in the Json5 definition files)"]
+    #[autocomplete = "autocomplete_badge"]
+    badge_name: String,
+    #[description = "The role assigned to this badge"]
+    role: Role
+) -> Result<(), RoleManagerError> {
+    let response = if let Some(id) = ctx.guild_id() {
+        let mut config = ServerConfig::read(id.get()).await?
+            .unwrap_or_default();
+
+        config.completed_badge_roles.insert(badge_name, role.id.get());
+        config.write(id.get()).await?;
+
+        "Updated badge roles for this server".to_string()
+    } else {
+        "Can only use command on servers!".to_string()
+    };
+
+    ctx.send(CreateReply::default()
+        .allowed_mentions(CreateAllowedMentions::default().empty_roles().empty_users())
+        .content(response)).await?;
+
+    Ok(())
+}
+
 /// Remove a badge from being given on this server
-#[poise::command(slash_command, required_permissions = "MANAGE_GUILD")]
-async fn remove(
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", subcommands("remove_base", "remove_complete"))]
+async fn remove(_ctx: PoiseContext<'_>) -> Result<(), RoleManagerError> {
+    Err(RoleManagerError::new("Impossible state reached, cannot run menu commands".to_string()))
+}
+
+/// The base role for a badge
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", rename = "base")]
+async fn remove_base(
     ctx: PoiseContext<'_>,
     #[description = "The badge name (as used in Json5 definition files)"]
+    #[autocomplete = "autocomplete_badge"]
     badge_name: String
 ) -> Result<(), RoleManagerError> {
     let response = if let Some(id) = ctx.guild_id() {
@@ -291,6 +411,36 @@ async fn remove(
             .unwrap_or_default();
 
         match config.badge_roles.remove(&badge_name) {
+            Some(_) => {
+                config.write(id.get()).await?;
+                "Updated badge roles for this server".to_string()
+            },
+            None => format!("Badge not found with name `{}` in this server", badge_name)
+        }
+    } else {
+        "Can only use command on servers!".to_string()
+    };
+
+    ctx.send(CreateReply::default()
+        .allowed_mentions(CreateAllowedMentions::default().empty_roles().empty_users())
+        .content(response)).await?;
+
+    Ok(())
+}
+
+/// The complete role for a badge (meets *all* requirements)
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", rename = "complete")]
+async fn remove_complete(
+    ctx: PoiseContext<'_>,
+    #[description = "The badge name (as used in Json5 definition files)"]
+    #[autocomplete = "autocomplete_badge"]
+    badge_name: String
+) -> Result<(), RoleManagerError> {
+    let response = if let Some(id) = ctx.guild_id() {
+        let mut config = ServerConfig::read(id.get()).await?
+            .unwrap_or_default();
+
+        match config.completed_badge_roles.remove(&badge_name) {
             Some(_) => {
                 config.write(id.get()).await?;
                 "Updated badge roles for this server".to_string()
