@@ -25,7 +25,7 @@ mod tests {
 
         // Definition file to use
         println!("Reading definition file");
-        let definition: RoleDefinition = json5::from_str(include_str!("../official-roles-24-06-01.json5")).unwrap();
+        let definition: RoleDefinition = json5::from_str(include_str!("../official-roles-25-10-28.json5")).unwrap();
 
         // Setup state for fetching info
         println!("Setting up state for run");
