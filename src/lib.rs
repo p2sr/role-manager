@@ -1,3 +1,5 @@
+extern crate serenity;
+
 pub mod boards;
 pub mod bot;
 pub mod config;

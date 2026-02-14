@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use serde::{Deserialize};
 use crate::boards::srcom::SrComBoardsState;
@@ -8,7 +9,100 @@ use crate::error::RoleManagerError;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct RoleDefinition {
+    #[serde(default = "default_levels")]
+    pub levels: Vec<RoleLevel>,
     pub badges: Vec<BadgeDefinition>
+}
+
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct RoleLevel {
+    pub name: String,
+    pub criteria: Vec<LevelCriteria>
+}
+
+impl RoleLevel {
+    pub(crate) fn fulfilled_by<'def, T>(&self, definition: &'def BadgeDefinition, reqs: &mut T) -> bool
+        where T: Iterator<Item = &'def RequirementDefinition> {
+        
+        // Enumerate all needed requirements
+        let mut needed: HashSet<&'def RequirementDefinition> = HashSet::new();
+        let mut must_contain_any = false;
+        
+        for criteria in &self.criteria { 
+            match criteria.necessary_reqs(definition) {
+                Some(reqs) => needed.extend(reqs),
+                None => {
+                    // None means that this is an `Any` requirement.
+                    // The only condition this imposes on the overall function is that reqs must contain a value
+                    must_contain_any = true;
+                }
+            }
+        }
+        
+        // Check the provided iterator to see if it satisfies all of `needed` and `must_contain_any`
+        for req in reqs {
+            needed.remove(req);
+            must_contain_any = false;
+        }
+        
+        // If there are no remaining `needed`, the iterator has fulfilled this RoleLevel
+        needed.is_empty() && !must_contain_any
+    }
+}
+
+
+
+#[derive(Deserialize, Debug, Clone)]
+pub enum LevelCriteria {
+    Any,
+    AllFromSrcomGame { game: GameId },
+    AllFromCm,
+    All
+}
+
+impl LevelCriteria {
+    fn necessary_reqs<'def>(&self, definition: &'def BadgeDefinition) -> Option<HashSet<&'def RequirementDefinition>> {
+
+        // Enumerate needed definitions for each type of criteria
+        let mut needed: HashSet<&'def RequirementDefinition> = HashSet::new();
+
+        match &self {
+            // The "Any" criteria is special, the reqs list just has to contain a value. We represent this by returning None
+            LevelCriteria::Any => return None,
+            // For the AllFromSrcomGame criteria, the reqs list has to contain all reqs that reference a specific srcom game
+            LevelCriteria::AllFromSrcomGame { game } => {
+                for req in &definition.requirements {
+                    match req {
+                        RequirementDefinition::Rank(RankRequirement::Srcom { game: req_game, .. }) => if req_game == game { needed.insert(req); },
+                        RequirementDefinition::Time(TimeRequirement::Srcom { game: req_game, ..}) => if req_game == game { needed.insert(req); },
+                        RequirementDefinition::RankTime(RankTimeRequirement::Srcom { game: req_game, .. }) => if req_game == game { needed.insert(req); },
+                        _ => {}
+                    }
+                }
+            },
+            // For the AllFromCm criteria, the reqs list has to contain all reqs that involve CM
+            LevelCriteria::AllFromCm => {
+                for req in &definition.requirements {
+                    match req {
+                        RequirementDefinition::Points { .. } => { needed.insert(req); }
+                        _ => {}
+                    }
+                }
+            }
+            // For the "All" criteria, the reqs list has to contain all reqs besides Manual
+            LevelCriteria::All => {
+                for req in &definition.requirements {
+                    match req {
+                        RequirementDefinition::Manual => {},
+                        _ => { needed.insert(req); }
+                    }
+                }
+            }
+        }
+        
+        Some(needed)
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
@@ -280,4 +374,12 @@ pub enum RankTimeRequirement {
 pub enum PartnerRestriction {
     #[serde(rename = "rank>=")]
     RankGte
+}
+
+/// Function that generates the default set of levels for servers that don't set it in the Json5.
+/// Now, this is equivalent to `vec![ RoleLevel { name: "Base", criteria: vec![ LevelCriteria::Any ] } ]`
+fn default_levels() -> Vec<RoleLevel> {
+    vec![
+        RoleLevel { name: "Base".to_string(), criteria: vec![ LevelCriteria::Any ] }
+    ]
 }

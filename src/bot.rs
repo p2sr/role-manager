@@ -10,7 +10,7 @@ use sea_orm::DatabaseConnection;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
 use sea_orm::ColumnTrait;
-use serenity::all::{CreateEmbed, Http};
+use serenity::all::{CreateEmbed, CreateMessage, CreateSelectMenu, CreateSelectMenuKind, Http};
 use serenity::builder::CreateAllowedMentions;
 use serenity::model::prelude::*;
 
@@ -47,6 +47,11 @@ async fn on_error(error: poise::FrameworkError<'_, BotState, RoleManagerError>) 
                 eprintln!("Caused by: {}", error);
             }
         }
+        poise::FrameworkError::Setup { error, .. } => {
+            // Issues during setup should fail fast, kill the program
+            eprintln!("Unrecoverable setup error: {:?}", error);
+            std::process::abort();
+        }
         _ => {
             eprintln!("Experienced generic error: {:#?}", error);
         }
@@ -68,15 +73,15 @@ pub async fn create_bot(config: Config, db: Arc<DatabaseConnection>, srcom_state
         .setup(move |ctx,_ready, framework| Box::pin(async move {
             GuildId::new(146404426746167296).set_commands(ctx,
                 poise::builtins::create_application_commands(&framework.options().commands)
-            ).await.unwrap();
+            ).await?;
 
             GuildId::new(299658323500990464).set_commands(ctx,
                 poise::builtins::create_application_commands(&framework.options().commands)
-            ).await.unwrap();
+            ).await?;
 
             GuildId::new(713630719582404609).set_commands(ctx,
                 poise::builtins::create_application_commands(&framework.options().commands)
-            ).await.unwrap();
+            ).await?;
 
             Ok(BotState { db, srcom_state, cm_state })
         }))
@@ -164,6 +169,10 @@ async fn update_badge_roles(guild_id: GuildId, db: &DatabaseConnection, client: 
 
             // Make sure the user has roles that they are supposed to
             for analyzed_badge in analysis.badges {
+                for level in analyzed_badge.get_levels(&definition) {
+
+                }
+
                 if let Some(role_id) = valid_badges.get(&analyzed_badge.definition) {
                     let role_id = RoleId::new(*role_id);
 
@@ -183,7 +192,7 @@ async fn update_badge_roles(guild_id: GuildId, db: &DatabaseConnection, client: 
                 badges_to_remove.remove(analyzed_badge.definition);
 
                 // Check if completed badge should also be awarded
-                if analyzed_badge.is_complete() {
+                /*if analyzed_badge.is_complete() {
                     if let Some(role_id) = valid_completed_badges.get(&analyzed_badge.definition) {
                         let role_id = RoleId::new(*role_id);
 
@@ -202,7 +211,7 @@ async fn update_badge_roles(guild_id: GuildId, db: &DatabaseConnection, client: 
                     }
 
                     complete_badges_to_remove.remove(analyzed_badge.definition);
-                }
+                }*/
             }
 
             // Make sure the user doesn't have roles they're not supposed to
@@ -328,19 +337,21 @@ async fn list(ctx: PoiseContext<'_>) -> Result<(), RoleManagerError> {
     Ok(())
 }
 
-/// Add a badge and a corresponding role to give on this server
-#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", subcommands("add_base", "add_complete"))]
-async fn add(_ctx: PoiseContext<'_>) -> Result<(), RoleManagerError> {
-    Err(RoleManagerError::new("Impossible state reached, cannot run menu commands".to_string()))
+#[derive(Debug, poise::ChoiceParameter)]
+pub enum BaseCompleteChoice {
+    Base,
+    Complete
 }
 
-/// The base role for a badge
-#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", rename = "base")]
-async fn add_base(
+/// Add a badge and a corresponding role to give on this server
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD")]
+async fn add(
     ctx: PoiseContext<'_>,
     #[description = "The badge name (as used in Json5 definition files)"]
     #[autocomplete = "autocomplete_badge"]
     badge_name: String,
+    #[description = "Base (any req) or Complete (all reqs)"]
+    complete: BaseCompleteChoice,
     #[description = "The role assigned to this badge"]
     role: Role
 ) -> Result<(), RoleManagerError> {
@@ -348,36 +359,11 @@ async fn add_base(
         let mut config = ServerConfig::read(id.get()).await?
             .unwrap_or_default();
 
-        config.badge_roles.insert(badge_name, role.id.get());
-        config.write(id.get()).await?;
+        match complete {
+            BaseCompleteChoice::Base => config.badge_roles.insert(badge_name, role.id.get()),
+            BaseCompleteChoice::Complete => config.completed_badge_roles.insert(badge_name, role.id.get())
+        };
 
-        "Updated badge roles for this server".to_string()
-    } else {
-        "Can only use command on servers!".to_string()
-    };
-
-    ctx.send(CreateReply::default()
-        .allowed_mentions(CreateAllowedMentions::default().empty_roles().empty_users())
-        .content(response)).await?;
-
-    Ok(())
-}
-
-/// The complete role for a badge (meets *all* requirements)
-#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", rename = "complete")]
-async fn add_complete(
-    ctx: PoiseContext<'_>,
-    #[description = "The badge name (as used in the Json5 definition files)"]
-    #[autocomplete = "autocomplete_badge"]
-    badge_name: String,
-    #[description = "The role assigned to this badge"]
-    role: Role
-) -> Result<(), RoleManagerError> {
-    let response = if let Some(id) = ctx.guild_id() {
-        let mut config = ServerConfig::read(id.get()).await?
-            .unwrap_or_default();
-
-        config.completed_badge_roles.insert(badge_name, role.id.get());
         config.write(id.get()).await?;
 
         "Updated badge roles for this server".to_string()
@@ -393,24 +379,25 @@ async fn add_complete(
 }
 
 /// Remove a badge from being given on this server
-#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", subcommands("remove_base", "remove_complete"))]
-async fn remove(_ctx: PoiseContext<'_>) -> Result<(), RoleManagerError> {
-    Err(RoleManagerError::new("Impossible state reached, cannot run menu commands".to_string()))
-}
-
-/// The base role for a badge
-#[poise::command(slash_command, required_permissions = "MANAGE_GUILD", rename = "base")]
-async fn remove_base(
+#[poise::command(slash_command, required_permissions = "MANAGE_GUILD")]
+async fn remove(
     ctx: PoiseContext<'_>,
     #[description = "The badge name (as used in Json5 definition files)"]
     #[autocomplete = "autocomplete_badge"]
-    badge_name: String
+    badge_name: String,
+    #[description = "Base (any req) or Complete (all reqs)"]
+    complete: BaseCompleteChoice,
 ) -> Result<(), RoleManagerError> {
     let response = if let Some(id) = ctx.guild_id() {
         let mut config = ServerConfig::read(id.get()).await?
             .unwrap_or_default();
 
-        match config.badge_roles.remove(&badge_name) {
+        let removal = match complete {
+            BaseCompleteChoice::Base => config.badge_roles.remove(&badge_name),
+            BaseCompleteChoice::Complete => config.completed_badge_roles.remove(&badge_name)
+        };
+
+        match removal {
             Some(_) => {
                 config.write(id.get()).await?;
                 "Updated badge roles for this server".to_string()
@@ -611,6 +598,7 @@ async fn analyze(
 async fn generate_report(
     ctx: PoiseContext<'_>,
     #[description = "Badge to analyze"]
+    #[autocomplete = "autocomplete_badge"]
     badge_name: String,
     #[description = "Json5 file describing skill role definitions"]
     definition_file: Option<Attachment>,
@@ -846,5 +834,30 @@ pub async fn user(
         .attachment(serenity::CreateAttachment::bytes(response_str.as_bytes(), definition_filename))
     ).await?;
 
+    Ok(())
+}
+
+#[poise::command(slash_command)]
+pub async fn display(ctx: PoiseContext<'_>) -> Result<(), RoleManagerError> {
+
+    /*let analysis = analyze_user(
+        ctx.author().id.get(),
+        &definition,
+        &connections,
+        ctx.data().srcom_state.clone(),
+        ctx.data().cm_state.clone(),
+        true
+    ).await?;*/
+
+    let components = vec![
+        serenity::CreateActionRow::SelectMenu(CreateSelectMenu::new("role_select", CreateSelectMenuKind::String {
+            options: vec![
+
+            ]
+        }))
+    ];
+
+    ctx.send(poise::CreateReply::default()
+        .components(components)).await?;
     Ok(())
 }

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use chrono::{Duration, NaiveDateTime, Utc};
-use crate::analyzer::role_definition::{BadgeDefinition, CmLeaderboard, RankRequirement, RankTimeRequirement, RecentRequirement, RequirementDefinition, RoleDefinition, TimeRequirement};
+use crate::analyzer::role_definition::{BadgeDefinition, CmLeaderboard, RankRequirement, RankTimeRequirement, RecentRequirement, RequirementDefinition, RoleDefinition, RoleLevel, TimeRequirement};
 use crate::analyzer::user::MetRequirementCause::CmActivity;
 use crate::boards::srcom::leaderboard::LeaderboardPlace;
 use crate::boards::srcom::SrComBoardsState;
@@ -126,8 +126,10 @@ pub struct AnalyzedUserBadge<'a> {
 }
 
 impl AnalyzedUserBadge<'_> {
-    pub fn is_complete(&self) -> bool {
-        return self.met_requirements.len() == self.definition.requirements.len();
+    pub fn get_levels<'rd>(&'rd self, role_def: &'rd RoleDefinition) -> Vec<&'rd RoleLevel> {
+        role_def.levels.iter()
+            .filter(|level| level.fulfilled_by(self.definition, &mut self.met_requirements.iter().map(|req| req.definition)) )
+            .collect()
     }
 }
 
