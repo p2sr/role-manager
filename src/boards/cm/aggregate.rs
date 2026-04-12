@@ -35,8 +35,12 @@ pub struct CachedAggregate {
 }
 
 pub async fn fetch_aggregate(page: &str) -> Result<AggregatedResponse, RoleManagerError> {
-    Ok(reqwest::get(format!("https://board.portal2.sr/{}/json", page))
-        .await.map_err(|err| format!("Failed to request {} page on board.portal2.sr: {}", page, err) )?
-        .json::<AggregatedResponse>()
-        .await.map_err(|err| format!("Failed to convert response from {} page on board.portal2.sr: {}", page, err) )?)
+    let url = format!("https://board.portal2.sr/{}/json", page);
+    let resp = reqwest::get(&url).await.map_err(|err| format!("Failed to request {} page on board.portal2.sr: {}", page, err) )?;
+    let body = resp.text().await.map_err(|err| format!("Failed to read response body from {} page on board.portal2.sr: {}", page, err) )?;
+
+    let parsed = json5::from_str::<AggregatedResponse>(&body)
+        .map_err(|err| format!("Failed to convert response from {} page on board.portal2.sr: {}", page, err) )?;
+
+    Ok(parsed)
 }
