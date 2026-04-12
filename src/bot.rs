@@ -801,6 +801,7 @@ pub async fn user(
         }
 
         fields.push((badge.definition.name.clone(), requirement_descs.join("\n")));
+        break; // only show the highest (first) badge for now, the embed can get too long otherwise
     }
 
     println!("Completed analysis: {:#?}", &analysis);
